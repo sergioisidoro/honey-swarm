@@ -1,0 +1,9 @@
+docker exec $(docker ps -q -f name=gitlab-runner) register \
+  --non-interactive \
+  --executor "docker" \
+  --docker-image alpine:latest \
+  --url "https://gitlab.com/" \
+  --registration-token "{{secrets.gitlab_runner_token}}" \
+  --run-untagged="true" \
+  --locked="false" \
+  --access-level="not_protected"

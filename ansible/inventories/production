@@ -1,0 +1,17 @@
+## SPECIFY ALL THE NODES HERE
+[nodes]
+node-1 ansible_user=root ansible_host=<IP> ansible_port=22 dockerswarm_advertise_addr=<IP>
+
+[dockerswarm_manager]
+node-1
+
+[dockerswarm_worker]
+node-2
+
+
+# THESE ARE NEEDED ALIAS FOR THE VARIABLES
+[production:children]
+nodes
+
+[production_encrypted:children]
+nodes

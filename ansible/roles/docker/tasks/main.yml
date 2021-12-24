@@ -1,0 +1,13 @@
+---
+# We require docker to make this work
+- name: Installing Docker
+  become: yes
+  import_role:
+    name: geerlingguy.docker
+
+- name: Install pip deps
+  become: yes
+  pip:
+    name:
+      - docker
+    state: present

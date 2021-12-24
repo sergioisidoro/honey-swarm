@@ -1,0 +1,26 @@
+
+- hosts: dockerswarm_manager[0] # executed on the first Swarm manager
+  roles:
+    # SWARMPIT
+    - role: docker-stack
+      tags:
+        - swarmpit
+      vars:
+        docker_stack_name: swarmpit 
+      when: deploy_swarmpit 
+
+    # GITLAB RUNNER
+    - role: docker-stack
+      tags:
+        - plausible-analytics
+      vars:
+        docker_stack_name: plausible-analytics
+      when: deploy_plausible
+
+    # # GITLAB RUNNER
+    # - role: docker-stack
+    #   tags:
+    #     - gitlab-runner
+    #   vars:
+    #     docker_stack_name: gitlab-runner
+    #   when: deploy_gitlab_runner

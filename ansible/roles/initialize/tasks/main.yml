@@ -1,0 +1,50 @@
+---
+- name: Install python
+  become: true
+  package:
+    name:
+      - python3-pip
+      - python3-virtualenv
+      - python3-dev
+      - virtualenv
+    state: present
+    update_cache: yes
+
+- name: "Install additional user packages"
+  become: true
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ additional_packages }}"
+
+- name: Install pip deps
+  become: yes
+  pip:
+    name:
+      - jsondiff
+    state: present
+
+- name: Create locales
+  locale_gen:
+    name: fi_FI.UTF-8
+    state: present
+
+- name: "Add all the users who are supposed to access the nodes"
+  include: set-users.yml
+  when: users
+
+- name: ensure github.com is a known host
+  lineinfile:
+    dest: /root/.ssh/known_hosts
+    create: yes
+    state: present
+    line: "{{ lookup('pipe', 'ssh-keyscan -t rsa github.com') }}"
+    regexp: "^github\\.com"
+
+- name: ensure gitlab.com is a known host
+  lineinfile:
+    dest: /root/.ssh/known_hosts
+    create: yes
+    state: present
+    line: "{{ lookup('pipe', 'ssh-keyscan -t rsa gitlab.com') }}"
+    regexp: "^gitlab\\.com"

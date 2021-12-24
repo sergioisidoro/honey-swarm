@@ -1,0 +1,23 @@
+- name: Create users from public keys
+  user:
+    name: "{{ item }}"
+    shell: /bin/bash
+    group: sudo
+    state: present
+  with_items: "{{ users }}"
+
+- name: Enable passwordless sudo
+  lineinfile:
+    dest: "/etc/sudoers.d/{{ item }}"
+    state: present
+    create: yes
+    regexp: "{{ item }} .*"
+    line: "{{ item }} ALL=(ALL) NOPASSWD: ALL"
+  with_items: "{{ users }}"
+
+- name: Add public keys
+  authorized_key:
+    user: "{{ item }}"
+    key: "{{ lookup('file', '../../pubkeys/'+item) }}"
+    state: present
+  with_items: "{{ users }}"
