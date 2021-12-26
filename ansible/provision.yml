@@ -11,6 +11,3 @@
 
 - import_playbook: 02-deploy-infrastucture.yml
   tags: [infrastructure]
-
-- import_playbook: 03-deploy-tools.yml
-  tags: [tools]

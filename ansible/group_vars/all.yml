@@ -22,11 +22,18 @@ additional_packages:
   - vim
   - htop
 
+
+# Add the names of the users who will have root ssh access to all nodes,
+# and then add a public key to pubkeys with the file named for each user
+# eg. 
+# users: 
+#  - sergio
+
 users:
 
 # Domains
 domains:
-  main: "xapted.com" # REPLACE THIS
+  main: "xapted.dev" # REPLACE THIS
 
 
 # Enable traefik ACME feature
@@ -43,8 +50,3 @@ docker_edition: ce
 #### CORE
 
 deploly_portainer: true
-
-
-## Optionals
-deploy_swarmpit: false
-deploy_plausible: false

@@ -25,7 +25,7 @@ This is heavily inspired and a lot of things replicated from [TADS Boilerplate p
 * You have Python3 installed on your local machine
 * You have git installed on your local machine
 
-### - Install ansible on your local machine
+### 1 - Install ansible on your local machine
 ```
 sudo pip3 install ansible
 ``` 
@@ -35,24 +35,24 @@ pip3 install ansible --user
 ```
 only for you
 
-### - Fork this, and clone your fork, or just clone this!
+### 2 - Fork this, and clone your fork, or just clone this!
 `git clone https://github.com/sergioisidoro/honey-swarm`
 
-### - Create your own inventory 
+### 3 - Create your own inventory 
 Go to your favorite cloud provider, and setup a few Virtual private servers.
 Save their IP (and/or internal IP) for later, and make sure your local machine
 can access those servers with your private key
 
-### - Add your inventory 
+### 4 - Add your inventory 
 Add at least one "manager nodes" in `ansible/inventories/ENVIRONMENT` as is instructed.
 
-### - Configure your parameters
+### 5 - Configure your parameters
 Change the necessary paramters in `ansible/group_vars/ENVIRONMENT.yml`. Most importantly:
 ```
 domains:
   main: "your-project.com"
 ```
-#### - Add the users who are supposed to have access to the nodes:
+#### 6 - Add the users who are supposed to have access to the nodes:
 - add the users to the `users:` variable like so:
 ```
 users:
@@ -61,9 +61,9 @@ users:
 
 and add their **public** key as a file name `<user>` to `ansible/pubkeys`. So if the user name is `honey` add a file called `honey` containing their public ssh keys
 
-## - Launch your fabulous 💅 stack!
+## 6 - Launch your fabulous 💅 stack!
 ```
-ansible-playbook -i ansible/inventories/ENVIRONMENT ansible/big-bang.yml 
+ansible-playbook -i ansible/inventories/ENVIRONMENT ansible/provision.yml 
 ```
 
 ## - Encrypt the secrets and commit your code!
@@ -78,3 +78,5 @@ ansible-vault encrypt `ansible/group_vars/production_encrypted.yml <other_files.
 - [ ] Make the inventory creation automatic with terraform in multiple cloud providers
   - [ ] DigitalOcean
   - [ ] Hetzner
+
+- [ ] Add additional core features, like monitoring with netdata or grafana
