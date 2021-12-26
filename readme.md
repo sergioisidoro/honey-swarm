@@ -75,3 +75,4 @@ Go to `portainer.<YOURDOMAIN>` and create an administrator platform
   - [ ] Hetzner
 
 - [ ] Add additional core features, like monitoring with netdata or grafana
+- [ ] Secure Traefik dashboard behind HTTP auth
