@@ -66,13 +66,8 @@ and add their **public** key as a file name `<user>` to `ansible/pubkeys`. So if
 ansible-playbook -i ansible/inventories/ENVIRONMENT ansible/provision.yml 
 ```
 
-## - Encrypt the secrets and commit your code!
-Because we're using some sensitive info that you might not want in the repository, 
-let's encrypt it before we commit, and push the data
-```
-ansible-vault encrypt `ansible/group_vars/production_encrypted.yml <other_files.xyz>
-```
-
+## 7 - IMPORTANT - Go to portainer and change your admin password
+Go to `portainer.<YOURDOMAIN>` and create an administrator platform
 
 # Todos ("Pull requests welcome")
 - [ ] Make the inventory creation automatic with terraform in multiple cloud providers

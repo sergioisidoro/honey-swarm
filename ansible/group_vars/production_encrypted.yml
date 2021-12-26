@@ -1,4 +1,0 @@
-# Credentials
-
-secrets:
-  gitlab_runner_token: YOUR-RUNNER-KEY

@@ -30,7 +30,7 @@
     state: present
 
 - name: "Add all the users who are supposed to access the nodes"
-  include: set-users.yml
+  import_tasks: set-users.yml
   when: users
 
 - name: ensure github.com is a known host

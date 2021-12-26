@@ -20,4 +20,4 @@
         - portainer
       vars:
         docker_stack_name: portainer
-      when: deploy_plausible
+      when: deploly_portainer
