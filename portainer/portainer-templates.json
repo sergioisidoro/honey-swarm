@@ -1,0 +1,18 @@
+{
+    "version": "2",
+    "templates": [
+        {
+            "type": 2,
+            "title": "Plausible",
+            "description": "Plausible analytics service",
+            "note": "Deploys plausible analytics service, along with the database and supporting services",
+            "categories": ["analytics"],
+            "platform": "linux",
+            "logo": "https://d33wubrfki0l68.cloudfront.net/7fe1e9eb24029471f1b2c53cbcf8c4ad0bc87af7/0b5a6/assets/images/icon/plausible_logo.compressed.png",
+            "repository": {
+              "url": "https://github.com/sergioisidoro/honey-swarm",
+              "stackfile": "portainer/stacks/plausible/docker-compose.yml"
+            }
+        }
+    ]
+  }
