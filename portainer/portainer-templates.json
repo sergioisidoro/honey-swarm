@@ -40,14 +40,14 @@
                     "description":"A key that will be used to encrypt sessions. Use a random string"
                 },
                 {
+                    "name": "POSTGRES_DATABASE_NAME",
+                    "label":"Database name (postgres)",
+                    "description": "The database name in postgres database where to store the main data."  
+                },
+                {
                     "name":"POSTGRES_PASSWORD",
                     "label":"The postgres password",
                     "description":"Password to access the database"
-                },
-                {
-                    "name": "POSTGRES_DATABASE_NAME",
-                    "label":"The postgres database to store data in",
-                    "description": "The database name in postgres database where to store the main data."  
                 }
             ]
         }
