@@ -12,7 +12,34 @@
             "repository": {
               "url": "https://github.com/sergioisidoro/honey-swarm",
               "stackfile": "portainer/stacks/plausible/docker-compose.yml"
-            }
+            },
+            "env": [
+                {
+                    "name":"ADMIN_USER_EMAIL",
+                    "label":"Administrator email",
+                    "description":"The email you'll use to login as admin to plausible."
+                },
+                {
+                    "name":"ADMIN_USER_NAME",
+                    "label":"Administrator username",
+                    "description":"The username you'll use to login as admin to plausible."
+                },
+                {
+                    "name":"ADMIN_USER_PWD",
+                    "label":"Administrator password",
+                    "description":"The password you'll use to login as admin to plausible."
+                },
+                {
+                    "name":"BASE_URL",
+                    "label":"Analytics URL",
+                    "description":"the URL for analytics (with HTTP:// or HTTPS:// prefix)"
+                },
+                {
+                    "name":"SECRET_KEY_BASE",
+                    "label":"Random secret key base",
+                    "description":"A key that will be used to encrypt sessions. Use a random string"
+                }
+            ]
         }
     ]
   }
