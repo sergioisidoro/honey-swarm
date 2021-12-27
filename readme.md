@@ -69,6 +69,9 @@ ansible-playbook -i ansible/inventories/ENVIRONMENT ansible/provision.yml
 ## 7 - IMPORTANT - Go to portainer and change your admin password
 Go to `portainer.<YOURDOMAIN>` and create an administrator platform
 
+## 8 - Add Honey swarm Portainer templates to portainer 
+Go to settings -> And set "App Templates" URL to `https://raw.githubusercontent.com/sergioisidoro/honey-swarm/portainer-stack/portainer/portainer-templates.json` (or equivalent to your cloned repository) to have access to the pre-made templates for apps.
+
 # Todos ("Pull requests welcome")
 - [ ] Make the inventory creation automatic with terraform in multiple cloud providers
   - [ ] DigitalOcean
