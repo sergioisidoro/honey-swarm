@@ -32,12 +32,22 @@
                 {
                     "name":"BASE_URL",
                     "label":"Analytics URL",
-                    "description":"the URL for analytics (with HTTP:// or HTTPS:// prefix)"
+                    "description":"the URL for analytics - eg analytics.yourdomain.com"
                 },
                 {
                     "name":"SECRET_KEY_BASE",
                     "label":"Random secret key base",
                     "description":"A key that will be used to encrypt sessions. Use a random string"
+                },
+                {
+                    "name":"POSTGRES_PASSWORD",
+                    "label":"The postgres password",
+                    "description":"Password to access the database"
+                },
+                {
+                    "name": "POSTGRES_DATABASE_NAME",
+                    "label":"The postgres database to store data in",
+                    "description": "The database name in postgres database where to store the main data."  
                 }
             ]
         }

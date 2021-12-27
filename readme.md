@@ -9,7 +9,7 @@ You can build an entire productivity and startup stack in a few minutes and unde
 This is heavily inspired and a lot of things replicated from [TADS Boilerplate project](https://github.com/thomvaill/tads-boilerplate), [swarmlet](https://swarmlet.dev/) and other projects like Dokku, and CapRover.
 
 ## Important notes
-- `traefik-public` is the network all services need to be if you want them public.
+- `public-network` is the network all services need to be if you want them public.
 
 # Quickstart
 
