@@ -1,0 +1,55 @@
+{
+    "version": "2",
+    "templates": [
+        {
+            "type": 2,
+            "title": "Plausible",
+            "description": "Plausible analytics service",
+            "note": "Deploys plausible analytics service, along with the database and supporting services",
+            "categories": ["analytics"],
+            "platform": "linux",
+            "logo": "https://d33wubrfki0l68.cloudfront.net/7fe1e9eb24029471f1b2c53cbcf8c4ad0bc87af7/0b5a6/assets/images/icon/plausible_logo.compressed.png",
+            "repository": {
+              "url": "https://github.com/sergioisidoro/honey-swarm",
+              "stackfile": "portainer/stacks/plausible/docker-compose.yml"
+            },
+            "env": [
+                {
+                    "name":"ADMIN_USER_EMAIL",
+                    "label":"Administrator email",
+                    "description":"The email you'll use to login as admin to plausible."
+                },
+                {
+                    "name":"ADMIN_USER_NAME",
+                    "label":"Administrator username",
+                    "description":"The username you'll use to login as admin to plausible."
+                },
+                {
+                    "name":"ADMIN_USER_PWD",
+                    "label":"Administrator password",
+                    "description":"The password you'll use to login as admin to plausible."
+                },
+                {
+                    "name":"BASE_URL",
+                    "label":"Analytics URL",
+                    "description":"the URL for analytics - eg analytics.yourdomain.com"
+                },
+                {
+                    "name":"SECRET_KEY_BASE",
+                    "label":"Random secret key base",
+                    "description":"A key that will be used to encrypt sessions. Use a random string"
+                },
+                {
+                    "name": "POSTGRES_DATABASE_NAME",
+                    "label":"Database name (postgres)",
+                    "description": "The database name in postgres database where to store the main data."  
+                },
+                {
+                    "name":"POSTGRES_PASSWORD",
+                    "label":"The postgres password",
+                    "description":"Password to access the database"
+                }
+            ]
+        }
+    ]
+  }

@@ -25,7 +25,7 @@ services:
       - portainer-data:/data
     networks:
       - portainer-network
-      - traefik-public
+      - public-network
     restart: always
     deploy:
       mode: replicated
@@ -43,5 +43,5 @@ volumes:
 
 networks:
   portainer-network:
-  traefik-public:
+  public-network:
     external: true

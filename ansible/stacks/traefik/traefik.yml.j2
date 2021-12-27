@@ -12,7 +12,7 @@ services:
       - '443:443'
       - '8080:8080'
     networks:
-      - traefik-public
+      - public-network
     command:
       - --log.level=INFO
       - --api.dashboard=true
@@ -20,7 +20,7 @@ services:
       - --providers.file.filename=/traefik-dynamic.yml
       - --providers.docker=true
       - --providers.docker.swarmmode=true
-      - --providers.docker.network=traefik-public
+      - --providers.docker.network=public-network
       - --providers.docker.exposedbydefault=false
       - --entrypoints.http.address=:80
       - --entrypoints.https.address=:443 
@@ -52,7 +52,7 @@ services:
         window: 120s
 
 networks:
-  traefik-public:
+  public-network:
     external: true
 
 volumes:

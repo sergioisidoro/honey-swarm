@@ -9,7 +9,7 @@ You can build an entire productivity and startup stack in a few minutes and unde
 This is heavily inspired and a lot of things replicated from [TADS Boilerplate project](https://github.com/thomvaill/tads-boilerplate), [swarmlet](https://swarmlet.dev/) and other projects like Dokku, and CapRover.
 
 ## Important notes
-- `traefik-public` is the network all services need to be if you want them public.
+- `public-network` is the network all services need to be if you want them public.
 
 # Quickstart
 
@@ -68,6 +68,9 @@ ansible-playbook -i ansible/inventories/ENVIRONMENT ansible/provision.yml
 
 ## 7 - IMPORTANT - Go to portainer and change your admin password
 Go to `portainer.<YOURDOMAIN>` and create an administrator platform
+
+## 8 - Add Honey swarm Portainer templates to portainer 
+Go to settings -> And set "App Templates" URL to `https://raw.githubusercontent.com/sergioisidoro/honey-swarm/portainer-stack/portainer/portainer-templates.json` (or equivalent to your cloned repository) to have access to the pre-made templates for apps.
 
 # Todos ("Pull requests welcome")
 - [ ] Make the inventory creation automatic with terraform in multiple cloud providers
