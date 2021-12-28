@@ -1,0 +1,31 @@
+---
+- name: check if mountpoints exist
+  stat: 
+    path: "{{ item.mount_point }}"
+  register: hetzner_volume_mounts
+  with_items: "{{ hetzner_volumes }}"
+
+- name: Create mount point for volume
+  file: 
+    path: "{{ item.item }}"
+    state: directory
+  with_items: "{{ hetzner_volume_mounts.results }}"
+  when: not item.stat.exists
+
+# TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
+# - name: Format volume
+#   mkfs:
+#     fstype: ext4
+#     state: formated
+#     dev: "/dev/disk/by-id/{{volume_id}}"
+#   with_items: "{{ hetzner_volumes }}"
+
+- name: Mount filesystem
+  mount:
+    fstype: ext4
+    src: "/dev/disk/by-id/{{item.volume_id}}"
+    path: "{{ item.mount_point }}"
+    state: mounted
+    opts: discard,defaults
+  register: mount_info
+  with_items: "{{ hetzner_volumes }}"

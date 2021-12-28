@@ -1,0 +1,8 @@
+---
+
+- import_tasks: ufw.yml
+- import_tasks: fail2ban.yml
+
+- name: set timezone to Europe/Helsinki
+  timezone:
+    name: Europe/Helsinki

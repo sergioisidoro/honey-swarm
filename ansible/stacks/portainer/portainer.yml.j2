@@ -1,0 +1,47 @@
+version: "3.7"
+
+services:
+  agent:
+    image: portainer/agent
+    environment:
+      AGENT_CLUSTER_ADDR: tasks.agent
+      AGENT_PORT: 9001
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    networks:
+      - portainer-network
+    deploy:
+      mode: global
+
+  portainer:
+    image: portainer/portainer-ce
+    command: -H tcp://tasks.agent:9001 --tlsskipverify
+    ports:
+      - "9000:9000"
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    networks:
+      - portainer-network
+      - public-network
+    restart: always
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.portainer.loadbalancer.server.port=9000
+        - traefik.http.routers.portainer.rule=Host(`portainer.{{ domains.main }}`)
+        - traefik.http.routers.portainer.entrypoints=http,https
+      placement:
+        constraints: [node.role == manager]
+
+volumes:
+  portainer-data:
+
+networks:
+  portainer-network:
+  public-network:
+    external: true

@@ -1,0 +1,12 @@
+---
+##
+# docker-stack role defaults
+##
+
+docker_stack_directory_local_path: "stacks/{{ docker_stack_name }}"
+docker_stack_yaml_local_path: "{{ docker_stack_directory_local_path }}/{{ docker_stack_name }}.yml.j2"
+docker_stack_setup_local_path: "{{ docker_stack_directory_local_path }}/setup.sh.j2"
+
+docker_stack_resources_directory_name: "resources"
+docker_stack_resources_local_path: "{{ docker_stack_directory_local_path }}/{{ docker_stack_resources_directory_name }}"
+docker_stack_secrets: {}

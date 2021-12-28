@@ -1,0 +1,66 @@
+---
+##
+# docker-stack role tasks
+##
+
+- name: Create secrets for {{docker_stack_name}}
+  docker_secret:
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    state: present
+  with_items: "{{ docker_stack_secrets }}"
+  no_log: True
+
+- name: Create stack configuration directory for {{docker_stack_name}}
+  file:
+    path: "~/.honey/stacks/{{ docker_stack_name }}"
+    state: directory
+    recurse: yes
+
+- name: Copy stack YAML for {{docker_stack_name}}
+  template:
+    src: "{{ docker_stack_yaml_local_path }}"
+    dest: "~/.honey/stacks/{{ docker_stack_name }}/{{ docker_stack_name }}.yml"
+
+- name: Check if we have a setup file for {{docker_stack_name}}
+  local_action: stat path={{ docker_stack_setup_local_path }}
+  register: init_file
+
+- name: Copy init file if exists for {{docker_stack_name}}
+  template:
+    src: "{{ docker_stack_setup_local_path }}"
+    dest: "~/.honey/stacks/{{ docker_stack_name }}/setup_{{ docker_stack_name }}.sh"
+  when: init_file.stat.exists
+
+- name: Copy stack YAML for {{docker_stack_name}}
+  template:
+    src: "{{ docker_stack_yaml_local_path }}"
+    dest: "~/.honey/stacks/{{ docker_stack_name }}/{{ docker_stack_name }}.yml"
+
+- name: Test stack resources existance for {{docker_stack_name}}
+  stat:
+    path: "{{ docker_stack_resources_local_path }}"
+  delegate_to: localhost
+  register: stat_result
+
+- name: Copy stack resources for {{docker_stack_name}}
+  copy:
+    src: "{{ docker_stack_resources_local_path }}"
+    dest: "~/.honey/stacks/{{ docker_stack_name }}"
+  when: stat_result.stat.exists
+
+- name: Deploy stack for {{docker_stack_name}}
+  docker_stack:
+    state: present
+    name: "{{ docker_stack_name }}"
+    compose:
+    - "~/.honey/stacks/{{ docker_stack_name }}/{{ docker_stack_name }}.yml"
+  register: stack_deploy
+
+- name: Execute init for {{docker_stack_name}}
+  raw: sh ~/.honey/stacks/{{ docker_stack_name }}/setup_{{ docker_stack_name }}.sh
+  when: init_file.stat.exists
+
+- debug:
+    var: stack_deploy.stack_spec_diff # noqa 503
+  when: stack_deploy.changed

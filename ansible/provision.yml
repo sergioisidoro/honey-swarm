@@ -1,0 +1,13 @@
+---
+###
+# provision playbook
+##
+
+- import_playbook: 00-init-nodes.yml
+  tags: [setup]
+
+- import_playbook: 01-setup-swarm.yml
+  tags: [docker]
+
+- import_playbook: 02-deploy-infrastucture.yml
+  tags: [infrastructure]

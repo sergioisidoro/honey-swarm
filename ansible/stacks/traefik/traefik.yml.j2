@@ -1,0 +1,59 @@
+version: '3.7'
+
+services:
+  traefik:
+    image: traefik:v2.5.6
+    restart: always
+    volumes:
+      - traefik-letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - '80:80'
+      - '443:443'
+      - '8080:8080'
+    networks:
+      - public-network
+    command:
+      - --log.level=INFO
+      - --api.dashboard=true
+      - --api.debug=true
+      - --providers.file.filename=/traefik-dynamic.yml
+      - --providers.docker=true
+      - --providers.docker.swarmmode=true
+      - --providers.docker.network=public-network
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443 
+{% if letsencrypt %}
+      - --entrypoints.https.http.tls=true
+      - --entrypoints.https.http.tls.certresolver=letsencrypt
+      - --certificatesresolvers.letsencrypt.acme.email={{letsencrypt_email}}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+{% endif %}
+      - --pilot.dashboard=false
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+        preferences:
+          - spread: node.id
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.traefik-api.loadbalancer.server.port=8080
+        - traefik.http.routers.traefik-api.rule=Host(`traefik.{{ domains.main }}`)
+        - traefik.http.routers.traefik-api.entrypoints=http,https
+        - traefik.http.routers.traefik-api.service=api@internal
+      restart_policy:
+        condition: any
+        delay: 2s
+        max_attempts: 5
+        window: 120s
+
+networks:
+  public-network:
+    external: true
+
+volumes:
+    traefik-letsencrypt:

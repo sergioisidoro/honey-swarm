@@ -1,0 +1,23 @@
+
+- hosts: dockerswarm_manager[0] # executed on the first Swarm manager
+  pre_tasks:
+    - name: Create Docker public-network network where all apps talk to traefik
+      docker_network:
+        name: public-network
+        driver: overlay
+
+  roles:
+    # TRAEFIK
+    - role: docker-stack
+      tags:
+        - stack-traefik
+      vars:
+        docker_stack_name: traefik
+
+    # PORTAINER
+    - role: docker-stack
+      tags:
+        - portainer
+      vars:
+        docker_stack_name: portainer
+      when: deploly_portainer

@@ -1,0 +1,10 @@
+---
+collections:
+  - name: ansible.posix
+
+roles:
+- src: geerlingguy.pip
+  version: 2.1.0
+
+- src: geerlingguy.docker
+  version: 4.1.1

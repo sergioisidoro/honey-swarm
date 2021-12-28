@@ -1,0 +1,10 @@
+## SPECIFY ALL THE NODES HERE
+[nodes]
+node-1 ansible_user=root ansible_host=NODE_IP ansible_port=22
+node-2 ansible_user=root ansible_host=NODE_IP ansible_port=22 dockerswarm_advertise_addr=<INTERNAL_IP>
+
+[dockerswarm_manager]
+node-1
+
+[dockerswarm_worker]
+node-2
