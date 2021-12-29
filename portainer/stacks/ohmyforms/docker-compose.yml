@@ -1,0 +1,83 @@
+version: "3.8"
+services:
+  mail:
+    image: bytemark/smtp
+    restart: always
+    networks:
+      - network
+
+  redis:
+    image: redis
+  db:
+    image: postgres:13-alpine
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: ohmyform
+    networks:
+      - network
+
+  ui:
+    image: ohmyform/ui
+    environment:
+      SERVER_ENDPOINT: http://api.${BASE_URL}/graphql
+      PORT: 8000
+    expose:
+      - "8000"
+    ports:
+      - 8000:8000
+    networks:
+      - network
+      - public-network
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.ohmyforms.loadbalancer.server.port=8000
+        - traefik.http.routers.ohmyforms.rule=Host(`${BASE_URL}`)
+        - traefik.http.routers.ohmyforms.entrypoints=http,https
+    depends_on:
+      - api
+
+  api:
+    image: ohmyform/api
+    environment:
+      CREATE_ADMIN: "true"
+      ADMIN_EMAIL: admin@local.host
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: postgresql://root:root@db:5432/ohmyform
+      MAILER_URI: smtp://mail
+      REDIS_URL: redis://redis
+      PORT: 5000
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.ohmyforms.loadbalancer.server.port=5000
+        - traefik.http.routers.ohmyforms.rule=Host(`api.${BASE_URL}`)
+        - traefik.http.routers.ohmyforms.entrypoints=http,https
+    expose:
+      - 5000
+    depends_on:
+      - db
+      - redis
+      - mail
+    networks:
+      - network
+      - public-network
+
+volumes:
+  db-data:
+    driver: local
+
+networks:
+  network:
+  public-network:
+    name: public-network
+    external: true
