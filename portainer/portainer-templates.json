@@ -75,7 +75,8 @@
                 {
                     "name":"GITLAB_RUNNER_IMAGE",
                     "label":"Runner image",
-                    "default": "alpine:latest"
+                    "description": "When changing this, please note Docker in docker restrictions",
+                    "default": "docker:19.03.12"
                 },
                 {
                     "name":"GITLAB_URL",
