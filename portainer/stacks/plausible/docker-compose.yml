@@ -50,6 +50,15 @@ services:
         - traefik.http.services.analytics.loadbalancer.server.port=8000
         - traefik.http.routers.analytics.rule=Host(`${BASE_URL}`)
         - traefik.http.routers.analytics.entrypoints=http,https
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
     networks:
       - network
       - public-network
