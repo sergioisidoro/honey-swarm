@@ -37,6 +37,13 @@ services:
         - traefik.http.routers.portainer.entrypoints=http,https
       placement:
         constraints: [node.role == manager]
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
 
 volumes:
   portainer-data:

@@ -55,6 +55,13 @@ services:
         delay: 2s
         max_attempts: 5
         window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
 
 networks:
   public-network:
