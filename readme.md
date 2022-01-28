@@ -38,7 +38,9 @@ Go to your favorite cloud provider, and setup a few Virtual private servers.
 * Save each server username and IP address (and/or internal IP)
 
 ## Add your servers to the inventory 🗄
-Add all your to `ansible/inventories/ENVIRONMENT`, where ENVIRONMENT can bet the name of the environment, or the name of the cluster
+Make a copy of the `cluster_template` in `ansible` folder, and give it an appropriate name for your `ENVIRONMENT`. ENVIRONMENT can bet the name of the environment, or the name of the cluster
+
+Add all your servers to `ansible/clusters/ENVIRONMENT/inventory` file, following the suggested structure.
 
 ```
 node-1 ansible_user=root ansible_host=NODE_IP ansible_port=22 dockerswarm_advertise_addr=<INTERNAL_IP>
@@ -56,7 +58,7 @@ node-1
 If you want the docker nodes to "talk" to each other only in the internal network, make sure you set the `dockerswarm_advertise_addr` to the private IP address instead of the public, and make sure the servers are in the same network and can talk to each other.
 
 ## Configure your parameters 📐
-Change the necessary paramters in `ansible/group_vars/ENVIRONMENT.yml`. Most importantly:
+Change the necessary paramters in `ansible/clusters/ENVIRONMENT/group_vars/all.yml`. Most importantly:
 ```
 domains:
   main: "your-project.com"
@@ -67,7 +69,7 @@ Make sure the lets encrypt email is valid otherwise you might not be able to iss
 ## (OPTIONAL) Add the users with ssh access to nodes 🤓
 Sometimes you want to allow other developers to access the nodes through SSH. To do this, do the following:
 
-- add the users to the `users:` variable like so:
+- add the users to the `users:` variable in `all.yml` like so:
 ```
 users:
  - user_1
@@ -78,7 +80,7 @@ and add their **public** key as a file name `<user>` to `ansible/pubkeys`. So if
 
 ## Launch your fabulous 💅 stack!
 ```
-ansible-playbook -i ansible/inventories/ENVIRONMENT ansible/provision.yml 
+ansible-playbook -i ansible/clusters/ENVIRONMENT ansible/provision.yml 
 ```
 
 This will run the entire setup across all nodes.
@@ -97,6 +99,6 @@ User your deployed services:
 * traefik.yourdomain.com
 
 # Todos ("Pull requests welcome") ☑️
-- [ ] Add additional core features, like monitoring with node exporter / prometheus
+- [ ] Add additional core features, like node monitoring with node exporter / prometheus
 - [ ] Secure Traefik dashboard behind HTTP auth
 - [ ] Add more app templates
