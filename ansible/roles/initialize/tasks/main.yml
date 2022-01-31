@@ -31,7 +31,7 @@
 
 - name: "Add all the users who are supposed to access the nodes"
   import_tasks: set-users.yml
-  when: users
+  when: users is defined
 
 - name: ensure github.com is a known host
   lineinfile:
