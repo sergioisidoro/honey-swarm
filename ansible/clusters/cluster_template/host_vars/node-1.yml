@@ -1,0 +1,16 @@
+---
+###
+# THESE CONFIGURATIONS APPLY TO ONLY ONE NODE (CORRESPONDENT TO THE NAME OF THE FILE)
+### 
+
+# digital_ocean_volumes:
+#   - volume_id: scsi-0DO_Volume_something-something
+#     mount_point: /mnt/external-volume
+
+# hetzner_volumes:
+#   - volume_id: scsi-0HC_Volume_1234567
+#     mount_point: /mnt/external-volume
+
+## Configure the docker options
+# docker_daemon_options:
+#   data-root: /mnt/external-volume

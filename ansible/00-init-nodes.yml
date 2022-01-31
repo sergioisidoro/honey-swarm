@@ -7,5 +7,7 @@
         msg: "Loaded base playbook"
   roles:
     - initialize
+    - hetzner
+    - digital-ocean
     - hardening
     - docker
