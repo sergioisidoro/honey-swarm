@@ -16,10 +16,12 @@ additional_packages:
 ## Add the names of the users who will have root ssh access to all nodes,
 ## and then add a public key to pubkeys with the file named for each user
 
-# users: 
+users: &USERS
 #  - sergio
 
-users: &all-users
+## Which users have access to docker? Use the line bellow so all
+## users specified above have access
+# docker_users: *USERS
 
 ## CLOUD PROVIDERS
 ## -----------------------------------------------------------------------
@@ -40,15 +42,12 @@ users: &all-users
 ## -----------------------------------------------------------------------
 ## Which users have access to docker? Defaults to the same value as users
 ## (ie all users)
-docker_users: *all-users
 
 ## geerlingguy.docker role configuration
 docker_edition: ce
 
-## Configure the docker options
-## WARNING - This will mount the volumes in all nodes.
-## to mount volumes individually on only one machine / node
-
+## WARNING - this applies to all node. To use different
+## volumes in different nodes, use the host_vars
 # docker_daemon_options:
 #   data-root: /mnt/external-volume
 
