@@ -6,3 +6,20 @@
 - name: set timezone to Europe/Helsinki
   timezone:
     name: Europe/Helsinki
+
+# Ensure Password logins are disabled.
+- name: Disable empty password login
+  lineinfile: 
+    dest: /etc/ssh/sshd_config
+    regexp: '^#?PermitEmptyPasswords' 
+    line: 'PermitEmptyPasswords no'
+  notify: restart sshd
+
+- name: Disable password login
+  lineinfile: 
+    dest: /etc/ssh/sshd_config
+    regexp: '^(#\s*)?PasswordAuthentication '
+    line: 'PasswordAuthentication no'
+  when: 
+    - disable_password_ssh is defined and disable_password_ssh
+  notify: restart sshd
