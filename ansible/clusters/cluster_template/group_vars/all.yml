@@ -16,7 +16,7 @@ additional_packages:
 ## Add the names of the users who will have root ssh access to all nodes,
 ## and then add a public key to pubkeys with the file named for each user
 
-users: &USERS
+# users: &USERS
 #  - sergio
 
 ## Which users have access to docker? Use the line bellow so all
