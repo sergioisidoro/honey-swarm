@@ -1,52 +1,69 @@
 ---
 ###
-# Variables default values
-##
-# We recommend to use production values here
-# These variables can be overridden later in other group_vars files
-#
-# Here is the Ansible groups structure:
-#  all
-#  ├── production
-#  ├── staging
-#  └── any_other_remote_environment...
-#
-# Each group has its "_overrides" counterpart, which enables you to override
-#  some variables locally in a xxx_overrides.yml file, which is not versionned
-# Have a look at .sample.yml files to see some examples
-##
+# THESE CONFIGURATIONS APPLY TO ALL NODES IN YOUR CLUSTER
 
-## Additional software that is going to be installed on all the nodes
-## to facilitate your life managing them when you need to SSH them
+# If you want to configure things individually per node, please edit
+# host_vars/<node-name>
+### 
+
 additional_packages:
   - vim
   - htop
 
 
-# Add the names of the users who will have root ssh access to all nodes,
-# and then add a public key to pubkeys with the file named for each user
-# eg. 
-# users: 
+## USERS
+## -----------------------------------------------------------------------
+## Add the names of the users who will have root ssh access to all nodes,
+## and then add a public key to pubkeys with the file named for each user
+
+# users: &USERS
 #  - sergio
 
-users:
+## Which users have access to docker? Use the line bellow so all
+## users specified above have access
+# docker_users: *USERS
 
-# Domains
+## CLOUD PROVIDERS
+## -----------------------------------------------------------------------
+## WARNING - This will mount the volumes in all nodes.
+## to mount volumes individually on only one machine / node
+## edit host_vars/<host_name>
+
+# digital_ocean_volumes:
+#   - volume_id: scsi-0DO_Volume_something-something
+#     mount_point: /mnt/external-volume
+
+# hetzner_volumes:
+#   - volume_id: scsi-0HC_Volume_1234567
+#     mount_point: /mnt/external-volume
+
+
+## DOCKER
+## -----------------------------------------------------------------------
+## Which users have access to docker? Defaults to the same value as users
+## (ie all users)
+
+## geerlingguy.docker role configuration
+docker_edition: ce
+
+## WARNING - this applies to all node. To use different
+## volumes in different nodes, use the host_vars
+# docker_daemon_options:
+#   data-root: /mnt/external-volume
+
+## DOMAINS
+## -----------------------------------------------------------------------
 domains:
   main: "yourdomain.tld" # REPLACE THIS
 
 
-# Enable traefik ACME feature
-# If enabled, traefik will use Let's Encrypt to get an SSL certificate automatically
-# Should be disabled only on local environments (localhost or vagrant)
+## FEATURES AND SETTINGS
+## -----------------------------------------------------------------------
+## Enable traefik ACME feature
+## If enabled, traefik will use Let's Encrypt to get an SSL certificate automatically
+## Should be disabled only on local environments (localhost or vagrant)
 letsencrypt: True
 letsencrypt_email: admin@{{ domains.main }}
 
-
-# geerlingguy.docker role configuration
-docker_edition: ce
-
-
-#### CORE
-
+## CORE
 deploly_portainer: true

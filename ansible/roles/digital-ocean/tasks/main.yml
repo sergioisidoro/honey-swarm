@@ -1,20 +1,19 @@
 ---
-
-- name: Initialize Hetzener volumes if configured
-  when: hetzner_volumes is defined
+- name: Initialize Digital Ocean volumes if configured
+  when: digital_ocean_volumes is defined
   block:
-
     - name: check if mountpoints exist
       stat: 
         path: "{{ item.mount_point }}"
-      register: hetzner_volume_mounts
-      with_items: "{{ hetzner_volumes }}"
+      register: digital_ocean_volume_mounts
+      with_items: "{{ digital_ocean_volumes }}"
+      when: digital_ocean_volumes is defined
 
     - name: Create mount point for volume
       file: 
         path: "{{ item.item }}"
         state: directory
-      with_items: "{{ hetzner_volume_mounts.results }}"
+      with_items: "{{ digital_ocean_volume_mounts.results }}"
       when: not item.stat.exists
 
     # TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
@@ -23,7 +22,7 @@
     #     fstype: ext4
     #     state: formated
     #     dev: "/dev/disk/by-id/{{volume_id}}"
-    #   with_items: "{{ hetzner_volumes }}"
+    #   with_items: "{{ digital_ocean_volumes }}"
 
     - name: Mount filesystem
       mount:
@@ -31,6 +30,8 @@
         src: "/dev/disk/by-id/{{item.volume_id}}"
         path: "{{ item.mount_point }}"
         state: mounted
-        opts: discard,defaults
+        opts: discard,defaults,nofail
+        boot: true
       register: mount_info
-      with_items: "{{ hetzner_volumes }}"
+      with_items: "{{ digital_ocean_volumes }}"
+      when: digital_ocean_volumes is defined
