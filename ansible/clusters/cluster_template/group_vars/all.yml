@@ -67,3 +67,6 @@ letsencrypt_email: admin@{{ domains.main }}
 
 ## CORE
 deploly_portainer: true
+
+## SECURITY
+disable_password_ssh: true
