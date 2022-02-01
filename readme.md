@@ -78,6 +78,29 @@ users:
 
 and add their **public** key as a file name `<user>` to `ansible/pubkeys`. So if the user name is `honey` add a file called `honey` containing their public ssh keys
 
+## (OPTIONAL) Store all your docker data in your cloud provider storage 📚
+If you are using Digital Ocean or Hetzenr, it is possible you might want to store all your docker data in their detachable volumes to facilitate snapshots, backups and duplication. To do so, all you need to do is mount those volumes 
+
+```.yaml
+digital_ocean_volumes:
+  - volume_id: scsi-0DO_Volume_something-something
+    mount_point: /mnt/docker-data-external-volume
+
+## OR
+
+hetzner_volumes:
+  - volume_id: scsi-0HC_Volume_1234567
+    mount_point: /mnt/docker-data-external-volume
+```
+
+using the volume ids specified by the cloud provider, and then use the `data-root` docker daemon configuration settings to point to the mounted location:
+```.yaml
+docker_daemon_options:
+  data-root: /mnt/docker-data-external-volume
+```
+
+**NOTE: to have different volumes per node, use `host_vars`, and not `group_vars/all.yml`**
+
 ## Launch your fabulous 💅 stack!
 ```
 ansible-playbook -i ansible/clusters/ENVIRONMENT ansible/provision.yml 
