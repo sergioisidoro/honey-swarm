@@ -20,7 +20,8 @@
     - { rule: 'limit', port: '{{ ssh_port | default("22") }}', proto: 'tcp' }
     - { rule: 'allow', port: '2376', proto: 'tcp' } ## This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
     - { rule: 'allow', port: '2377', proto: 'tcp' } ## communication between the nodes of a Docker Swarm or cluster. It only needs to be opened on manager nodes.
-    - { rule: 'allow', port: '7946' }               ## communication among nodes (container network discovery).
+    - { rule: 'allow', port: '7946', proto: 'tcp' } ## communication among nodes (container network discovery).
+    - { rule: 'allow', port: '7946', proto: 'udp' } ## communication among nodes (container network discovery).
     - { rule: 'allow', port: '4789', proto: 'udp' } ## overlay network traffic (container ingress networking).
     - { rule: 'allow', port: '80', proto: 'tcp' }   ## HTTP
     - { rule: 'allow', port: '443', proto: 'tcp' }  ## HTTPS
