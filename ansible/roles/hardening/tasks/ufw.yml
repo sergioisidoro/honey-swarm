@@ -6,21 +6,30 @@
 - name: Install ufw
   apt: package=ufw state=present
 
-- name: Configure ufw defaults
+- name: Configure ufw defaults to {{default_ufw_rule}}
   ufw: direction={{ item.direction }} policy={{ item.policy }}
   with_items:
-    - { direction: 'incoming', policy: 'allow' }
-    - { direction: 'outgoing', policy: 'allow' }
+    - { direction: 'incoming', policy: '{{default_ufw_rule}}' }
+    - { direction: 'outgoing', policy: '{{default_ufw_rule}}' }
   notify:
     - restart ufw
 
-- name: Configure ufw rules
+- name: Configure ufw rules for Docker, Docker swarm and basic services
   ufw: rule={{ item.rule }} port={{ item.port }} proto={{ item.proto }}
   with_items:
     - { rule: 'limit', port: '{{ ssh_port | default("22") }}', proto: 'tcp' }
-    - { rule: 'allow', port: '80', proto: 'tcp' }
-    - { rule: 'allow', port: '443', proto: 'tcp' }
-    - { rule: 'allow', port: '2377', proto: 'tcp' }
+    - { rule: 'allow', port: '2376', proto: 'tcp' } ## This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
+    - { rule: 'allow', port: '2377', proto: 'tcp' } ## communication between the nodes of a Docker Swarm or cluster. It only needs to be opened on manager nodes.
+    - { rule: 'allow', port: '7946' }               ## communication among nodes (container network discovery).
+    - { rule: 'allow', port: '4789', proto: 'udp' } ## overlay network traffic (container ingress networking).
+    - { rule: 'allow', port: '80', proto: 'tcp' }   ## HTTP
+    - { rule: 'allow', port: '443', proto: 'tcp' }  ## HTTPS
+  notify:
+    - restart ufw
+
+- name: Configure ufw rules for additional services if provided
+  ufw: rule={{ item.rule }} port={{ item.port }} proto={{ item.proto }}
+  with_items: "{{ ufw_extra_rules | default([]) }}"
   notify:
     - restart ufw
 
