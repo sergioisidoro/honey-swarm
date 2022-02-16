@@ -6,7 +6,7 @@
 default_ufw_rule: 'allow' # or 'deny'
 ssh_port: 22
 
-ufw_extra_rules: 
+ufw_extra_rules: []
   # - rule: 'allow'
   #   port: '443'
   #   proto: 'tcp'
