@@ -4,18 +4,12 @@
   when: hetzner_volumes is defined
   block:
 
-    - name: check if mountpoints exist
-      stat: 
-        path: "{{ item.mount_point }}"
-      register: hetzner_volume_mounts
-      with_items: "{{ hetzner_volumes }}"
-
-    - name: Create mount point for volume
+    - name: Create mount point for all volumes volume
       file: 
-        path: "{{ item.item }}"
+        path: "{{ item.mount_point }}"
         state: directory
-      with_items: "{{ hetzner_volume_mounts.results }}"
-      when: not item.stat.exists
+      with_items: "{{ hetzner_volumes }}"
+      when: hetzner_volumes is defined
 
     # TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
     # - name: Format volume
