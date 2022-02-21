@@ -112,8 +112,8 @@
                 {
                     "name":"GITLAB_RUNNER_RUN_ONLY_PROTECTED",
                     "label":"Run only protected",
-                    "description": "Runner only runs protected branches",
-                    "default": "false"
+                    "description": "Runner only runs protected branches  For a protected runner, 'ref_protected' parameter. For an unprotected runner 'not_protected'",
+                    "default": "not_protected"
                 }
             ]
         },
@@ -169,8 +169,8 @@
                 {
                     "name":"GITLAB_RUNNER_RUN_ONLY_PROTECTED",
                     "label":"Run only protected",
-                    "description": "Runner only runs protected branches",
-                    "default": "false"
+                    "description": "Runner only runs protected branches  For a protected runner, 'ref_protected' parameter. For an unprotected runner 'not_protected'",
+                    "default": "not_protected"
                 }
             ]
         }

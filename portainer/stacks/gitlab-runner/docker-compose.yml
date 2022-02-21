@@ -20,14 +20,15 @@ services:
       register
       --non-interactive
       --executor "docker"
-      --docker-image ${GITLAB_RUNNER_IMAGE}
-      --url "${GITLAB_URL}""
+      --docker-image "${GITLAB_RUNNER_IMAGE}"
+      --url "${GITLAB_URL}"
       --registration-token "${GITLAB_RUNNER_REGISTRATION_TOKEN}"
       --name "${GITLAB_RUNNER_NAME}"
-      --tag-list ${GITLAB_RUNNER_TAGS}
-      --run-untagged=${GITLAB_RUNNER_RUN_UNTAGGED}
-      --locked=${GITLAB_RUNNER_LOCKED}
-      --access-level=${GITLAB_RUNNER_RUN_ONLY_PROTECTED}
+      --tag-list "${GITLAB_RUNNER_TAGS}"
+      --run-untagged "${GITLAB_RUNNER_RUN_UNTAGGED}"
+      --locked "${GITLAB_RUNNER_LOCKED}"
+      --access-level "${GITLAB_RUNNER_RUN_ONLY_PROTECTED}"
+
 
 volumes:
   runner-config:
