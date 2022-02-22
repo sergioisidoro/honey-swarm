@@ -15,6 +15,12 @@
             },
             "env": [
                 {
+                    "name":"DISABLE_REGISTRATION",
+                    "label":"Disable registration",
+                    "description":"If true disables registrations. Registrations also won't work for invites",
+                    "default": "true"
+                },
+                {
                     "name":"ADMIN_USER_EMAIL",
                     "label":"Administrator email",
                     "description":"The email you'll use to login as admin to plausible."
