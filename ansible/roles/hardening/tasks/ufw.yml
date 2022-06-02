@@ -6,21 +6,44 @@
 - name: Install ufw
   apt: package=ufw state=present
 
-- name: Configure ufw defaults
+- name: Configure ufw incoming defaults to {{default_ufw_default_inbound_rule}}
   ufw: direction={{ item.direction }} policy={{ item.policy }}
   with_items:
-    - { direction: 'incoming', policy: 'allow' }
-    - { direction: 'outgoing', policy: 'allow' }
+    - { direction: 'incoming', policy: '{{default_ufw_default_inbound_rule}}' }
   notify:
     - restart ufw
 
-- name: Configure ufw rules
-  ufw: rule={{ item.rule }} port={{ item.port }} proto={{ item.proto }}
+- name: Configure ufw ougoing defaults to {{default_ufw_default_outbound_rule}}
+  ufw: direction={{ item.direction }} policy={{ item.policy }}
+  with_items:
+    - { direction: 'outgoing', policy: '{{default_ufw_default_outbound_rule}}' }
+  notify:
+    - restart ufw
+
+# These are VERY verbose, so that even if you decide to block outgoing traffic, things will still work.
+- name: Configure ufw rules for Docker, Docker swarm and SENSIBLE basic services
+  ufw: "{{item}}"
   with_items:
     - { rule: 'limit', port: '{{ ssh_port | default("22") }}', proto: 'tcp' }
-    - { rule: 'allow', port: '80', proto: 'tcp' }
-    - { rule: 'allow', port: '443', proto: 'tcp' }
-    - { rule: 'allow', port: '2377', proto: 'tcp' }
+    - { rule: 'allow', port: '2376', proto: 'tcp' }       ## This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
+    - { rule: 'allow', port: '2377', proto: 'tcp' }       ## communication between the nodes of a Docker Swarm or cluster. It only needs to be opened on manager nodes.
+    - { rule: 'allow', port: '7946' }                     ## communication among nodes (container network discovery).
+    - { rule: 'allow', port: '2376', proto: 'tcp', direction: 'out' }       ## This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
+    - { rule: 'allow', port: '2377', proto: 'tcp', direction: 'out' }       ## communication between the nodes of a Docker Swarm or cluster. It only needs to be opened on manager nodes.
+    - { rule: 'allow', port: '7946', direction: 'out' }                     ## communication among nodes (container network discovery).
+    - { rule: 'allow', port: '50' }                       ## IP sec ESP
+    - { rule: 'allow', port: '50', direction: 'out' }     ## IP sec ESP
+    - { rule: 'allow', port: '53', direction: 'out' }     ## For DNS
+    - { rule: 'allow', port: 'http', direction: 'in' }    ## For HTTP
+    - { rule: 'allow', port: 'http', direction: 'out' }   ## For HTTP
+    - { rule: 'allow', port: 'https', direction: 'in' }   ## For HTTPS
+    - { rule: 'allow', port: 'https', direction: 'out' }  ## For HTTPS
+  notify:
+    - restart ufw
+
+- name: Configure ufw rules for additional services if provided
+  ufw: "{{item}}"
+  with_items: "{{ ufw_extra_rules | default([]) }}"
   notify:
     - restart ufw
 

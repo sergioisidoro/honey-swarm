@@ -11,6 +11,10 @@ This is heavily inspired and a lot of things replicated from [TADS Boilerplate p
 ## Important notes
 - `public-network` is the network all services need to be if you want them public so Traefik can find them.
 - Remember to put annotations on the `deploy` section so that Traefik can find your services across all nodes.
+- By default all non necessary incoming ports are CLOSED in the firewall. SSH is limited. If you want to open other ports
+  - set `default_ufw_default_inbound_rule: 'allow'` on your cluster variables to accept traffic from any port - SCARY
+  - You can add more ports (eg. if your containers and services are using some other ports) with `ufw_extra_rules` variable. See `roles/hardening/tasks/ufw.yml` for more technical details. - BETTER
+
 
 # 🚀 Quickstart
 - Install Ansible on your machine

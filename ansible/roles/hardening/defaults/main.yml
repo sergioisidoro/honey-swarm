@@ -1,0 +1,13 @@
+---
+##
+# hardening role defaults
+##
+
+default_ufw_default_inbound_rule: 'deny' # or 'allow'
+default_ufw_default_outbound_rule: 'allow' # or 'deny'
+ssh_port: 22
+
+ufw_extra_rules: []
+  # - rule: 'allow'
+  #   port: '443'
+  #   proto: 'tcp'
