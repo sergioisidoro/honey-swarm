@@ -43,6 +43,7 @@ services:
       labels:
         # It is here to ensure labels are not empty
         - dummy=hello
+{% set middlewares = [] %}
 {% if traefik_api_enabled %}
         - traefik.enable=true
         - traefik.http.services.traefik-api.loadbalancer.server.port=8080
@@ -50,8 +51,15 @@ services:
         - traefik.http.routers.traefik-api.entrypoints=http,https
         - traefik.http.routers.traefik-api.service=api@internal
 {% if traefik_web_password is defined and traefik_web_username is defined %}
-        - "traefik.http.middlewares.traefik-api-auth.basicauth.users={{traefik_web_username}}:{{  traefik_web_password }}"
-        - traefik.http.routers.traefik-api.middlewares=traefik-api-auth
+        - "traefik.http.middlewares.traefik-api-auth.basicauth.users={{traefik_web_username}}:{{  traefik_web_password }}" {% set middlewares = middlewares + ['traefik-api-auth'] %}
+{% endif %}
+{% if internal_services_ip_whitelist is defined %}
+        - traefik.http.middlewares.traefik-allowed-ips.ipwhitelist.sourcerange={{ internal_services_ip_whitelist }} {% set middlewares = middlewares + ['traefik-allowed-ips'] %}
+{% endif %%}
+{% if middlewares %}
+{% for middleware in traefik_middlewares %}
+        - traefik.http.middlewares.traefik-api.middlewares={% for middleware in traefik_middlewares %}{{ middleware }},{% endfor %}
+{% endfor %}
 {% endif %}
 {% endif %}
       restart_policy:

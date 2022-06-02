@@ -86,3 +86,9 @@ deploly_portainer: true
 
 ## SECURITY
 disable_password_ssh: true
+
+## INTERNAL SERVICE IP WHITELIST
+## Allow only certain IP ranges to connect to internal services, such as
+## traefik dashboard and portainer web interface.
+
+# internal_services_ip_whitelist: "100.64.0.0/10, 127.0.0.1/32"
