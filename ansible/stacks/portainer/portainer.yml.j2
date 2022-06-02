@@ -38,7 +38,7 @@ services:
 {% if internal_services_ip_whitelist is defined %}
         - traefik.http.middlewares.portainer-allowed-ips.ipwhitelist.sourcerange={{ internal_services_ip_whitelist }}
         - traefik.http.routers.portainer.middlewares=portainer-allowed-ips
-{% endif %%}
+{% endif %}
       placement:
         constraints: [node.role == manager]
       update_config:
