@@ -70,6 +70,13 @@ domains:
 
 Make sure the lets encrypt email is valid otherwise you might not be able to issue and renew the certificates.
 
+**If you want to use Portainer Enteprise edition, or customize the portainer images** you should set the variables in the 'all.yml' for the appropriate images. If you chose the EE edition, make sure you have a valid license.
+
+```
+portainer_image: "portainer/portainer-ee"
+portainer_agent_image: "portainer/agent"
+```
+
 ## (OPTIONAL) Add the users with ssh access to nodes 🤓
 Sometimes you want to allow other developers to access the nodes through SSH. To do this, do the following:
 

@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   agent:
-    image: portainer/agent
+    image: {{portainer_agent_image}}
     environment:
       AGENT_CLUSTER_ADDR: tasks.agent
       AGENT_PORT: 9001
@@ -15,7 +15,7 @@ services:
       mode: global
 
   portainer:
-    image: portainer/portainer-ce
+    image: {{portainer_image}}
     command: -H tcp://tasks.agent:9001 --tlsskipverify
     ports:
       - "9000:9000"

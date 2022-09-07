@@ -68,5 +68,9 @@ letsencrypt_email: admin@{{ domains.main }}
 ## CORE
 deploly_portainer: true
 
+# Customize Portainer images
+# portainer_image: "portainer/portainer-ee"
+# portainer_agent_image: "portainer/agent"
+
 ## SECURITY
 disable_password_ssh: true
