@@ -25,12 +25,13 @@
   ufw: "{{item}}"
   with_items:
     - { rule: 'limit', port: '{{ ssh_port | default("22") }}', proto: 'tcp' }
-    - { rule: 'allow', port: '2376', proto: 'tcp' }       ## This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
-    - { rule: 'allow', port: '2377', proto: 'tcp' }       ## communication between the nodes of a Docker Swarm or cluster. It only needs to be opened on manager nodes.
-    - { rule: 'allow', port: '7946' }                     ## communication among nodes (container network discovery).
-    - { rule: 'allow', port: '2376', proto: 'tcp', direction: 'out' }       ## This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
-    - { rule: 'allow', port: '2377', proto: 'tcp', direction: 'out' }       ## communication between the nodes of a Docker Swarm or cluster. It only needs to be opened on manager nodes.
-    - { rule: 'allow', port: '7946', direction: 'out' }                     ## communication among nodes (container network discovery).
+    # https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts
+    - { rule: 'allow', port: '2377', proto: 'tcp' }       ## for cluster management communications -- ONLY NEEDED ON MANAGERS - TODO, REMOVE ON NON MANAGER NODES
+    - { rule: 'allow', port: '7946' }                     ## for communication among nodes
+    - { rule: 'allow', port: '4789', proto: 'udp' }       ## for overlay network traffic
+    # https://www.digitalocean.com/community/tutorials/how-to-configure-the-linux-firewall-for-docker-swarm-on-ubuntu-16-04
+    - { rule: 'allow', port: '2376', proto: 'tcp' }       ## for secure Docker client communication. This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
+    # SERVICES
     - { rule: 'allow', port: '50' }                       ## IP sec ESP
     - { rule: 'allow', port: '50', direction: 'out' }     ## IP sec ESP
     - { rule: 'allow', port: '53', direction: 'out' }     ## For DNS
@@ -38,6 +39,7 @@
     - { rule: 'allow', port: 'http', direction: 'out' }   ## For HTTP
     - { rule: 'allow', port: 'https', direction: 'in' }   ## For HTTPS
     - { rule: 'allow', port: 'https', direction: 'out' }  ## For HTTPS
+    - { rule: 'allow', port: '9001'}                      ## For Portainer node communication
   notify:
     - restart ufw
 
