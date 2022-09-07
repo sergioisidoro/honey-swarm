@@ -3,6 +3,9 @@
 # docker-stack role defaults
 ##
 
+portainer_image: "portainer/portainer-ce"
+portainer_agent_image: "portainer/agent"
+
 docker_stack_directory_local_path: "stacks/{{ docker_stack_name }}"
 docker_stack_yaml_local_path: "{{ docker_stack_directory_local_path }}/{{ docker_stack_name }}.yml.j2"
 docker_stack_setup_local_path: "{{ docker_stack_directory_local_path }}/setup.sh.j2"
