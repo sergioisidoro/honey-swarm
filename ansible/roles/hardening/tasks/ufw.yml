@@ -31,14 +31,11 @@
     - { rule: 'allow', port: '4789', proto: 'udp' }       ## for overlay network traffic
     # https://www.digitalocean.com/community/tutorials/how-to-configure-the-linux-firewall-for-docker-swarm-on-ubuntu-16-04
     - { rule: 'allow', port: '2376', proto: 'tcp' }       ## for secure Docker client communication. This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
-    # SERVICES
+    # BASIC SERVICES
     - { rule: 'allow', port: '50' }                       ## IP sec ESP
-    - { rule: 'allow', port: '50', direction: 'out' }     ## IP sec ESP
-    - { rule: 'allow', port: '53', direction: 'out' }     ## For DNS
-    - { rule: 'allow', port: 'http', direction: 'in' }    ## For HTTP
-    - { rule: 'allow', port: 'http', direction: 'out' }   ## For HTTP
-    - { rule: 'allow', port: 'https', direction: 'in' }   ## For HTTPS
-    - { rule: 'allow', port: 'https', direction: 'out' }  ## For HTTPS
+    - { rule: 'allow', port: '53' }                       ## For DNS
+    - { rule: 'allow', port: 'http' }                     ## For HTTP
+    - { rule: 'allow', port: 'https' }                    ## For HTTPS
     - { rule: 'allow', port: '9001'}                      ## For Portainer node communication
   notify:
     - restart ufw
