@@ -8,9 +8,9 @@
       ansible.builtin.file:
         path: "{{ item.mount_point }}"
         state: directory
+        recurse: yes
       with_items: "{{ hetzner_volume_mounts }}"
       when: hetzner_volume_mounts is defined
-
     # TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
     # - name: Format volume
     #   mkfs:

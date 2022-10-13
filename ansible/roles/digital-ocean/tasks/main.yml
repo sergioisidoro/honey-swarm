@@ -6,9 +6,10 @@
       ansible.builtin.file:
         path: "{{ item.mount_point }}"
         state: directory
+        recurse: yes
       with_items: "{{ digital_ocean_volumes }}"
       when: digital_ocean_volumes is defined
-      
+
     # TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
     # - name: Format volume
     #   mkfs:
