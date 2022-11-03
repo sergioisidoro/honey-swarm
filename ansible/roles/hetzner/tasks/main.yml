@@ -4,19 +4,13 @@
   when: hetzner_volumes is defined
   block:
 
-    - name: check if mountpoints exist
-      stat: 
+    - name: Create mount point if does not exist
+      ansible.builtin.file:
         path: "{{ item.mount_point }}"
-      register: hetzner_volume_mounts
-      with_items: "{{ hetzner_volumes }}"
-
-    - name: Create mount point for volume
-      file: 
-        path: "{{ item.item }}"
         state: directory
-      with_items: "{{ hetzner_volume_mounts.results }}"
-      when: not item.stat.exists
-
+        recurse: yes
+      with_items: "{{ hetzner_volume_mounts }}"
+      when: hetzner_volume_mounts is defined
     # TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
     # - name: Format volume
     #   mkfs:

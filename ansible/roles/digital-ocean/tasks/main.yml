@@ -2,19 +2,13 @@
 - name: Initialize Digital Ocean volumes if configured
   when: digital_ocean_volumes is defined
   block:
-    - name: check if mountpoints exist
-      stat: 
+    - name: Create mount point if does not exist
+      ansible.builtin.file:
         path: "{{ item.mount_point }}"
-      register: digital_ocean_volume_mounts
+        state: directory
+        recurse: yes
       with_items: "{{ digital_ocean_volumes }}"
       when: digital_ocean_volumes is defined
-
-    - name: Create mount point for volume
-      file: 
-        path: "{{ item.item }}"
-        state: directory
-      with_items: "{{ digital_ocean_volume_mounts.results }}"
-      when: not item.stat.exists
 
     # TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
     # - name: Format volume
