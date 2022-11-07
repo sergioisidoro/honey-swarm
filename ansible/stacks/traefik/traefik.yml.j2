@@ -45,11 +45,17 @@ services:
         preferences:
           - spread: node.id
       labels:
-        - traefik.enable=true
+        # It is here to ensure labels are not empty
+        - dummy=hello
+{% if traefik_api_enabled %}
         - traefik.http.services.traefik-api.loadbalancer.server.port=8080
         - traefik.http.routers.traefik-api.rule=Host(`traefik.{{ domains.main }}`)
         - traefik.http.routers.traefik-api.entrypoints=http,https
         - traefik.http.routers.traefik-api.service=api@internal
+{% if traefik_web_password and traefik_web_username %}
+        - "traefik.http.middlewares.auth.basicauth.users={{traefik_web_username}}:{{ traefik_web_password | hash() }}"
+{% endif %}
+{% endif %}
       restart_policy:
         condition: any
         delay: 2s
