@@ -65,6 +65,13 @@ domains:
 letsencrypt: True
 letsencrypt_email: admin@{{ domains.main }}
 
+## traefik
+# Traefik api will enable also the dashboard to see the current deployments
+traefik_api_enabled: false
+## If enabled it is VERY recommended to set these ones
+# traefik_web_password: traefik
+# traefik_web_username: traefik-super-duper-password
+
 ## CORE
 deploly_portainer: true
 
