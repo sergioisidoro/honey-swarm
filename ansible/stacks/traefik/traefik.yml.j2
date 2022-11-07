@@ -46,7 +46,6 @@ services:
           - spread: node.id
       labels:
 {% if traefik_api_enabled %}
-        - traefik.enable=true
         - traefik.http.services.traefik-api.loadbalancer.server.port=8080
         - traefik.http.routers.traefik-api.rule=Host(`traefik.{{ domains.main }}`)
         - traefik.http.routers.traefik-api.entrypoints=http,https
