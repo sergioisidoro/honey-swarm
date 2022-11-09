@@ -5,8 +5,18 @@ A production ready, secure, batteries included docker swarm self hosted PaaS (Pl
 # The vision
 You can build an entire productivity and startup stack in a few minutes and under 50Eur/month, with a few VPS on DigitalOcean / Hetzner, etc. Services are self hosted, privacy aware, secure, and compliant with most data storage regulations.
 
-### We are built on the shoulders of Giants!
-This is heavily inspired and a lot of things replicated from [TADS Boilerplate project](https://github.com/thomvaill/tads-boilerplate), [swarmlet](https://swarmlet.dev/) and other projects like Dokku, and CapRover. Anf
+## Features 
+- Setup python, ansible and SSH users with Public key for all nodes
+- Setup basic ufw and fail2ban with a reasonable set of rules for web deployments
+- Setup Docker + Docker swarm with multiple nodes
+- Portainer agent + Traefik for management of the stack
+- A set of Portainer apps with Traefik routes.
+  - analytics
+  - gitlab runner
+  - mastodon social media
+
+## We are built on the shoulders of Giants!
+This is heavily inspired and a lot of things replicated from [TADS Boilerplate project](https://github.com/thomvaill/tads-boilerplate), [swarmlet](https://swarmlet.dev/) and other projects like Dokku, and CapRover.
 
 ## Important notes
 - `public-network` is the network all services need to be if you want them public so Traefik can find them.
@@ -14,7 +24,6 @@ This is heavily inspired and a lot of things replicated from [TADS Boilerplate p
 - By default all non necessary incoming ports are CLOSED in the firewall. SSH is limited. If you want to open other ports
   - set `default_ufw_default_inbound_rule: 'allow'` on your cluster variables to accept traffic from any port - SCARY
   - You can add more ports (eg. if your containers and services are using some other ports) with `ufw_extra_rules` variable. See `roles/hardening/tasks/ufw.yml` for more technical details. - BETTER
-
 
 # 🚀 Quickstart
 - Install Ansible on your machine
@@ -130,9 +139,8 @@ Go to settings -> And set "App Templates" URL to `https://raw.githubusercontent.
 ## Enjoy ✅
 User your deployed services:
 * portainer.yourdomain.com
-* traefik.yourdomain.com
+* traefik.yourdomain.com (optional)
 
 # Todos ("Pull requests welcome") ☑️
 - [ ] Add additional core features, like node monitoring with node exporter / prometheus
-- [ ] Secure Traefik dashboard behind HTTP auth
 - [ ] Add more app templates
