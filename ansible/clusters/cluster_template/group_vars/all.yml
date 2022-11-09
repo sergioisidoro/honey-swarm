@@ -70,9 +70,12 @@ letsencrypt_email: admin@{{ domains.main }}
 traefik_api_enabled: false
 # For the dashboard to be enabled, API must also be enabled
 traefik_dashboard_enabled: false
+
 ## If enabled it is VERY recommended to set these ones
-# traefik_web_password: traefik
-# traefik_web_username: traefik-super-duper-password
+## echo $(htpasswd -nB traefik) | sed -e s/\\$/\\$\\$/g
+## eg. traefik
+# traefik_web_password: "$$2y$$05$$H.uz9vHY9OmX/vs5wiNkjOE/LRMSribqL38/gsVIA0vUD2ASt733u"
+# traefik_web_username: traefik
 
 ## CORE
 deploly_portainer: true

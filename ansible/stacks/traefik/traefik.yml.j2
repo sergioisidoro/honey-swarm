@@ -47,12 +47,14 @@ services:
         # It is here to ensure labels are not empty
         - dummy=hello
 {% if traefik_api_enabled %}
+        - traefik.enable=true
         - traefik.http.services.traefik-api.loadbalancer.server.port=8080
         - traefik.http.routers.traefik-api.rule=Host(`traefik.{{ domains.main }}`)
         - traefik.http.routers.traefik-api.entrypoints=http,https
         - traefik.http.routers.traefik-api.service=api@internal
 {% if traefik_web_password and traefik_web_username %}
-        - "traefik.http.middlewares.auth.basicauth.users={{traefik_web_username}}:{{ traefik_web_password | hash() }}"
+        - "traefik.http.middlewares.traefik-api-auth.basicauth.users={{traefik_web_username}}:{{  traefik_web_password }}"
+        - traefik.http.routers.traefik-api.middlewares=traefik-api-auth
 {% endif %}
 {% endif %}
       restart_policy:
@@ -63,10 +65,10 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
-        order: start-first
+        order: stop-first
       rollback_config:
         parallelism: 1
-        order: start-first
+        order: stop-first
 
 networks:
   public-network:
