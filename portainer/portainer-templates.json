@@ -1,184 +1,301 @@
 {
-    "version": "2",
-    "templates": [
+  "version": "2",
+  "templates": [
+    {
+      "type": 2,
+      "title": "Plausible",
+      "description": "Plausible analytics service",
+      "note": "Deploys plausible analytics service, along with the database and supporting services",
+      "categories": [
+        "analytics"
+      ],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/plausible.png",
+      "repository": {
+        "url": "https://github.com/sergioisidoro/honey-swarm",
+        "stackfile": "portainer/stacks/plausible/docker-compose.yml"
+      },
+      "env": [
         {
-            "type": 2,
-            "title": "Plausible",
-            "description": "Plausible analytics service",
-            "note": "Deploys plausible analytics service, along with the database and supporting services",
-            "categories": ["analytics"],
-            "platform": "linux",
-            "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/plausible.png",
-            "repository": {
-              "url": "https://github.com/sergioisidoro/honey-swarm",
-              "stackfile": "portainer/stacks/plausible/docker-compose.yml"
-            },
-            "env": [
-                {
-                    "name":"DISABLE_REGISTRATION",
-                    "label":"Disable registration",
-                    "description":"If true disables registrations. Registrations also won't work for invites",
-                    "default": "true"
-                },
-                {
-                    "name":"ADMIN_USER_EMAIL",
-                    "label":"Administrator email",
-                    "description":"The email you'll use to login as admin to plausible."
-                },
-                {
-                    "name":"ADMIN_USER_NAME",
-                    "label":"Administrator username",
-                    "default": "plausible",
-                    "description":"The username you'll use to login as admin to plausible."
-                },
-                {
-                    "name":"ADMIN_USER_PWD",
-                    "label":"Administrator password",
-                    "description":"The password you'll use to login as admin to plausible."
-                },
-                {
-                    "name":"BASE_URL",
-                    "label":"Base URL",
-                    "description":"the URL for analytics - eg analytics.yourdomain.com"
-                },
-                {
-                    "name":"SECRET_KEY_BASE",
-                    "label":"secret_key_base",
-                    "description":"A key that will be used to encrypt sessions. Use a random string that is long enough, at least 64 chars"
-                },
-                {
-                    "name": "POSTGRES_USER",
-                    "label":"Database user",
-                    "default": "plausible"
-                },
-                {
-                    "name": "POSTGRES_DB",
-                    "label":"Database name",
-                    "description": "The database name in postgres database where to store data.",
-                    "default": "plausible"
-                },
-                {
-                    "name":"POSTGRES_PASSWORD",
-                    "label":"Postgres password",
-                    "description":"Password to access the database",
-                    "default": "plausible"
-                }
-            ]
+          "name": "DISABLE_REGISTRATION",
+          "label": "Disable registration",
+          "description": "If true disables registrations. Registrations also won't work for invites",
+          "default": "true"
         },
         {
-            "type": 2,
-            "title": "Gitlab runner (Docker in docker)",
-            "description": "Gitlab runner instance to run your Gitlab CI pipelines",
-            "note": "If registration job fails, please restart it or run registration manually. PLEASE NOTE the security implications of running docker in docker!",
-            "categories": ["ci"],
-            "platform": "linux",
-            "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/gitlab-runner.png",
-            "repository": {
-              "url": "https://github.com/sergioisidoro/honey-swarm",
-              "stackfile": "portainer/stacks/gitlab-runner-dind/docker-compose.yml"
-            },
-            "env": [
-                {
-                    "name":"GITLAB_RUNNER_IMAGE",
-                    "label":"Runner image",
-                    "description": "When changing this, please note Docker in docker restrictions",
-                    "default": "docker:19.03.12"
-                },
-                {
-                    "name":"GITLAB_URL",
-                    "label":"Gitlab url",
-                    "default": "https://gitlab.com/"
-                },
-                {
-                    "name":"GITLAB_RUNNER_REGISTRATION_TOKEN",
-                    "label":"registration token"
-                },
-                {
-                    "name":"GITLAB_RUNNER_NAME",
-                    "label":"Runner name"
-                },
-                {
-                    "name":"GITLAB_RUNNER_TAGS",
-                    "label":"tags",
-                    "description": "comma separated values",
-                    "default": "docker,honey-swarm,dind"
-                },
-                {
-                    "name":"GITLAB_RUNNER_RUN_UNTAGGED",
-                    "label":"Run untagged",
-                    "description": "Run non tagged jobs",
-                    "default": "true"
-                },
-                {
-                    "name":"GITLAB_RUNNER_LOCKED",
-                    "label":"Runner locked",
-                    "description": "Runner locked to specific projects",
-                    "default": "false"
-                },
-                {
-                    "name":"GITLAB_RUNNER_RUN_ONLY_PROTECTED",
-                    "label":"Run only protected",
-                    "description": "Runner only runs protected branches  For a protected runner, 'ref_protected' parameter. For an unprotected runner 'not_protected'",
-                    "default": "not_protected"
-                }
-            ]
+          "name": "ADMIN_USER_EMAIL",
+          "label": "Administrator email",
+          "description": "The email you'll use to login as admin to plausible."
         },
         {
-            "type": 2,
-            "title": "Gitlab runner",
-            "description": "Gitlab runner instance to run your Gitlab CI pipelines",
-            "note": "If registration job fails, please restart it or run registration manually. WITHOUT docker in docker enabled",
-            "categories": ["ci"],
-            "platform": "linux",
-            "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/gitlab-runner.png",
-            "repository": {
-              "url": "https://github.com/sergioisidoro/honey-swarm",
-              "stackfile": "portainer/stacks/gitlab-runner/docker-compose.yml"
-            },
-            "env": [
-                {
-                    "name":"GITLAB_RUNNER_IMAGE",
-                    "label":"Runner image",
-                    "default": "alpine:latest"
-                },
-                {
-                    "name":"GITLAB_URL",
-                    "label":"Gitlab url",
-                    "default": "https://gitlab.com/"
-                },
-                {
-                    "name":"GITLAB_RUNNER_REGISTRATION_TOKEN",
-                    "label":"registration token"
-                },
-                {
-                    "name":"GITLAB_RUNNER_NAME",
-                    "label":"Runner name"
-                },
-                {
-                    "name":"GITLAB_RUNNER_TAGS",
-                    "label":"tags",
-                    "description": "comma separated values",
-                    "default": "docker,honey-swarm"
-                },
-                {
-                    "name":"GITLAB_RUNNER_RUN_UNTAGGED",
-                    "label":"Run untagged",
-                    "description": "Run non tagged jobs",
-                    "default": "true"
-                },
-                {
-                    "name":"GITLAB_RUNNER_LOCKED",
-                    "label":"Runner locked",
-                    "description": "Runner locked to specific projects",
-                    "default": "false"
-                },
-                {
-                    "name":"GITLAB_RUNNER_RUN_ONLY_PROTECTED",
-                    "label":"Run only protected",
-                    "description": "Runner only runs protected branches  For a protected runner, 'ref_protected' parameter. For an unprotected runner 'not_protected'",
-                    "default": "not_protected"
-                }
-            ]
+          "name": "ADMIN_USER_NAME",
+          "label": "Administrator username",
+          "default": "plausible",
+          "description": "The username you'll use to login as admin to plausible."
+        },
+        {
+          "name": "ADMIN_USER_PWD",
+          "label": "Administrator password",
+          "description": "The password you'll use to login as admin to plausible."
+        },
+        {
+          "name": "BASE_URL",
+          "label": "Base URL",
+          "description": "the URL for analytics - eg analytics.yourdomain.com"
+        },
+        {
+          "name": "SECRET_KEY_BASE",
+          "label": "secret_key_base",
+          "description": "A key that will be used to encrypt sessions. Use a random string that is long enough, at least 64 chars"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "label": "Database user",
+          "default": "plausible"
+        },
+        {
+          "name": "POSTGRES_DB",
+          "label": "Database name",
+          "description": "The database name in postgres database where to store data.",
+          "default": "plausible"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "label": "Postgres password",
+          "description": "Password to access the database",
+          "default": "plausible"
         }
-    ]
-  }
+      ]
+    },
+    {
+      "type": 2,
+      "title": "Gitlab runner (Docker in docker)",
+      "description": "Gitlab runner instance to run your Gitlab CI pipelines",
+      "note": "If registration job fails, please restart it or run registration manually. PLEASE NOTE the security implications of running docker in docker!",
+      "categories": [
+        "ci"
+      ],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/gitlab-runner.png",
+      "repository": {
+        "url": "https://github.com/sergioisidoro/honey-swarm",
+        "stackfile": "portainer/stacks/gitlab-runner-dind/docker-compose.yml"
+      },
+      "env": [
+        {
+          "name": "GITLAB_RUNNER_IMAGE",
+          "label": "Runner image",
+          "description": "When changing this, please note Docker in docker restrictions",
+          "default": "docker:19.03.12"
+        },
+        {
+          "name": "GITLAB_URL",
+          "label": "Gitlab url",
+          "default": "https://gitlab.com/"
+        },
+        {
+          "name": "GITLAB_RUNNER_REGISTRATION_TOKEN",
+          "label": "registration token"
+        },
+        {
+          "name": "GITLAB_RUNNER_NAME",
+          "label": "Runner name"
+        },
+        {
+          "name": "GITLAB_RUNNER_TAGS",
+          "label": "tags",
+          "description": "comma separated values",
+          "default": "docker,honey-swarm,dind"
+        },
+        {
+          "name": "GITLAB_RUNNER_RUN_UNTAGGED",
+          "label": "Run untagged",
+          "description": "Run non tagged jobs",
+          "default": "true"
+        },
+        {
+          "name": "GITLAB_RUNNER_LOCKED",
+          "label": "Runner locked",
+          "description": "Runner locked to specific projects",
+          "default": "false"
+        },
+        {
+          "name": "GITLAB_RUNNER_RUN_ONLY_PROTECTED",
+          "label": "Run only protected",
+          "description": "Runner only runs protected branches  For a protected runner, 'ref_protected' parameter. For an unprotected runner 'not_protected'",
+          "default": "not_protected"
+        }
+      ]
+    },
+    {
+      "type": 2,
+      "title": "Gitlab runner",
+      "description": "Gitlab runner instance to run your Gitlab CI pipelines",
+      "note": "If registration job fails, please restart it or run registration manually. WITHOUT docker in docker enabled",
+      "categories": [
+        "ci"
+      ],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/gitlab-runner.png",
+      "repository": {
+        "url": "https://github.com/sergioisidoro/honey-swarm",
+        "stackfile": "portainer/stacks/gitlab-runner/docker-compose.yml"
+      },
+      "env": [
+        {
+          "name": "GITLAB_RUNNER_IMAGE",
+          "label": "Runner image",
+          "default": "alpine:latest"
+        },
+        {
+          "name": "GITLAB_URL",
+          "label": "Gitlab url",
+          "default": "https://gitlab.com/"
+        },
+        {
+          "name": "GITLAB_RUNNER_REGISTRATION_TOKEN",
+          "label": "registration token"
+        },
+        {
+          "name": "GITLAB_RUNNER_NAME",
+          "label": "Runner name"
+        },
+        {
+          "name": "GITLAB_RUNNER_TAGS",
+          "label": "tags",
+          "description": "comma separated values",
+          "default": "docker,honey-swarm"
+        },
+        {
+          "name": "GITLAB_RUNNER_RUN_UNTAGGED",
+          "label": "Run untagged",
+          "description": "Run non tagged jobs",
+          "default": "true"
+        },
+        {
+          "name": "GITLAB_RUNNER_LOCKED",
+          "label": "Runner locked",
+          "description": "Runner locked to specific projects",
+          "default": "false"
+        },
+        {
+          "name": "GITLAB_RUNNER_RUN_ONLY_PROTECTED",
+          "label": "Run only protected",
+          "description": "Runner only runs protected branches  For a protected runner, 'ref_protected' parameter. For an unprotected runner 'not_protected'",
+          "default": "not_protected"
+        }
+      ]
+    }
+        {
+      "type": 2,
+      "title": "Mastodon Instance",
+      "description": "Mastodon is a self hosted social media and micro blogging platform",
+      "note": "To generate Vapid Kyes run docker run -it tootsuite/mastodon bundle exec rake mastodon:webpush:generate_vapid_key. To generate individual secrets you can run docker run -it tootsuite/mastodon bundle exec rake secret",
+      "categories": [
+        "social-media"
+      ],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/mastodon.png",
+      "repository": {
+        "url": "https://github.com/sergioisidoro/honey-swarm",
+        "stackfile": "portainer/stacks/mastodon/docker-compose.yml"
+      },
+      "env": [
+        {
+          "label": "UNIQUE_INSTANCE_NAME",
+          "name": "UNIQUE_INSTANCE_NAME",
+          "description": "Unique instance name to enable multiple installations in same protainer. Do not use spaces or dots, and prefer -case",
+          "default": "mastodon-main"
+        },
+        {
+          "label": "SECRET_KEY_BASE",
+          "name": "SECRET_KEY_BASE",
+          "description": "Secret key to encrypt sessions. Run 'docker run -it tootsuite/mastodon bundle exec rake secret' to generate"
+        },
+        {
+          "label": "OTP_SECRET",
+          "name": "OTP_SECRET",
+          "description": "Secret key to encrypt one time tokens. Run 'docker run -it tootsuite/mastodon bundle exec rake secret' to generate"
+        },
+        {
+          "label": "LOCAL_DOMAIN",
+          "name": "LOCAL_DOMAIN",
+          "description": "Instance Domain (eg. xyz.com)"
+        },
+        {
+          "label": "POSTGRES_PASSWORD",
+          "name": "POSTGRES_PASSWORD",
+          "description": "Postgres password"
+        },
+        {
+          "label": "POSTGRES_USER",
+          "name": "POSTGRES_USER",
+          "description": "Postgres username",
+          "default": "mastodon"
+        },
+        {
+          "label": "POSTGRES_DB",
+          "name": "POSTGRES_DB",
+          "description": "Postgres database name",
+          "default": "mastodon"
+        },
+        {
+          "label": "SMTP_SERVER",
+          "name": "SMTP_SERVER",
+          "description": "Email serveer",
+        },
+        {
+          "label": "SMTP_PORT",
+          "name": "SMTP_PORT",
+          "description": "Email server port",
+        },
+        {
+          "label": "SMTP_LOGIN",
+          "name": "SMTP_LOGIN",
+          "description": "Email server login username"
+        },
+        {
+          "label": "SMTP_PASSWORD",
+          "name": "SMTP_PASSWORD",
+          "description": "Email server login password"
+        },
+        {
+          "label": "SMTP_FROM_ADDRES",
+          "name": "SMTP_FROM_ADDRES",
+          "description": "Email From address"
+        },
+        {
+          "label": "S3_ENABLED",
+          "name": "S3_ENABLED",
+          "description": "S3 static file storage enabled",
+          "default": "false"
+        },
+        {
+          "label": "S3_BUCKET",
+          "name": "S3_BUCKET",
+          "description": "S3 static file storage bucket"
+        },
+        {
+          "label": "AWS_ACCESS_KEY_ID",
+          "name": "AWS_ACCESS_KEY_ID",
+          "description": "S3 static file storage Key ID"
+        },
+        {
+          "label": "AWS_SECRET_ACCESS_KEY",
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "description": "S3 static file storage Key"
+        },
+        {
+          "label": "VAPID_PRIVATE_KEY",
+          "name": "VAPID_PRIVATE_KEY",
+          "description": "Vapid push notification private key"
+        },
+        {
+          "label": "VAPID_PUBLIC_KEY",
+          "name": "VAPID_PUBLIC_KEY",
+          "description": "Vapid push notification public key"
+        }
+      ]
+    }
+  ]
+}
