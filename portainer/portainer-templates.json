@@ -185,8 +185,8 @@
           "default": "not_protected"
         }
       ]
-    }
-        {
+    },
+    {
       "type": 2,
       "title": "Mastodon Instance",
       "description": "Mastodon is a self hosted social media and micro blogging platform",
