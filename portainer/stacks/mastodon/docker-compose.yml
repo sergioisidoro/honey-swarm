@@ -1,0 +1,281 @@
+version: '3.7'
+services:
+
+  mail:
+    image: bytemark/smtp
+    restart: always
+    networks:
+      - mastodon-network
+
+  postgres:
+    restart: always
+    image: postgres:14-alpine
+    shm_size: 256mb
+    networks:
+      - mastodon-network
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+  redis:
+    restart: always
+    image: redis:7-alpine
+    networks:
+      - mastodon-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+    volumes:
+      - redis-data:/data
+
+  # TODO - OPTIONAL
+  # es:
+  #   restart: always
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.17.4
+  #   environment:
+  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m -Des.enforce.bootstrap.checks=true"
+  #     - "xpack.license.self_generated.type=basic"
+  #     - "xpack.security.enabled=false"
+  #     - "xpack.watcher.enabled=false"
+  #     - "xpack.graph.enabled=false"
+  #     - "xpack.ml.enabled=false"
+  #     - "bootstrap.memory_lock=true"
+  #     - "cluster.name=es-mastodon"
+  #     - "discovery.type=single-node"
+  #     - "thread_pool.write.queue_size=1000"
+  #   networks:
+  #      - public-network
+  #      - mastodon-network
+  #   healthcheck:
+  #      test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
+  #   volumes:
+  #      - ./elasticsearch:/usr/share/elasticsearch/data
+  #   ulimits:
+  #     memlock:
+  #       soft: -1
+  #       hard: -1
+  #     nofile:
+  #       soft: 65536
+  #       hard: 65536
+  #   ports:
+  #     - '127.0.0.1:9200:9200'
+
+  web:
+    build: .
+    image: tootsuite/mastodon
+    restart: always
+    command: bash -c "rm -f /mastodon/tmp/pids/server.pid; bundle exec rake db:migrate; bundle exec rails s -p 3000"
+    networks:
+      - public-network
+      - mastodon-network
+    healthcheck:
+      # prettier-ignore
+      test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:3000/health || exit 1']
+    expose:
+      - 3000
+    depends_on:
+      - postgres
+      - redis
+      # - es
+    volumes:
+      - mastodon-public-data:/mastodon/public/system
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.${UNIQUE_INSTANCE_NAME}-web.loadbalancer.server.port=3000
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-web.rule=Host(`${LOCAL_DOMAIN}`)
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-web.entrypoints=http,https
+        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-web-redirect-to-https.redirectscheme.scheme=https
+        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-web-redirect-to-https.redirectscheme.permanent=true
+        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-web-compression.compress=true
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-web.middlewares=${UNIQUE_INSTANCE_NAME}-web-redirect-to-https,${UNIQUE_INSTANCE_NAME}-web-compression
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+    environment:
+      LOCAL_DOMAIN: ${LOCAL_DOMAIN}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE} 
+      OTP_SECRET: ${OTP_SECRET}
+      DB_HOST: 'postgres'
+      DB_PASS: ${POSTGRES_PASSWORD}
+      DB_USER: ${POSTGRES_USER}
+      DB_NAME: ${POSTGRES_DB}
+      DB_PORT: 5432
+      # SMTP settings
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_LOGIN: ${SMTP_LOGIN}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_ADDRES: ${SMTP_FROM_ADDRESS}
+      # File settings
+      S3_ENABLED: ${S3_ENABLED}
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_ALIAS_HOST: ${S3_ALIAS_HOST}
+      # Vapid
+      # Generate with `rake mastodon:webpush:generate_vapid_key`
+      # docker run -it tootsuite/mastodon bundle exec rake mastodon:webpush:generate_vapid_key
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}  
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  streaming:
+    build: .
+    image: tootsuite/mastodon
+    restart: always
+    command: node ./streaming
+    networks:
+      - public-network
+      - mastodon-network
+    healthcheck:
+      # prettier-ignore
+      test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:4000/api/v1/streaming/health || exit 1']
+    expose:
+      - 4000
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.${UNIQUE_INSTANCE_NAME}-streaming.loadbalancer.server.port=4000
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.rule=Host(`${LOCAL_DOMAIN}`) && PathPrefix(`/api/v1/streaming`))
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.entrypoints=http,https
+        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-streaming-redirect-to-https.redirectscheme.scheme=https
+        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-streaming-redirect-to-https.redirectscheme.permanent=true
+        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-streaming-compression.compress=true
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.middlewares=${UNIQUE_INSTANCE_NAME}-streaming-redirect-to-https,${UNIQUE_INSTANCE_NAME}-streaming-compression
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+    environment:
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE} 
+      OTP_SECRET: ${OTP_SECRET}
+      DB_HOST: 'postgres'
+      DB_PASS: ${POSTGRES_PASSWORD}
+      DB_USER: ${POSTGRES_USER}
+      DB_NAME: ${POSTGRES_DB}
+      DB_PORT: 5432
+      # SMTP settings
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_LOGIN: ${SMTP_LOGIN}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_ADDRES: ${SMTP_FROM_ADDRESS}
+      # File settings
+      S3_ENABLED: ${S3_ENABLED}
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_ALIAS_HOST: ${S3_ALIAS_HOST}
+      # Vapid
+      # Generate with `rake mastodon:webpush:generate_vapid_key`
+      # docker run -it tootsuite/mastodon bundle exec rake mastodon:webpush:generate_vapid_key
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}  
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      LOCAL_DOMAIN: ${LOCAL_DOMAIN}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  sidekiq:
+    build: .
+    image: tootsuite/mastodon
+    restart: always
+    command: bundle exec sidekiq
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - public-network
+      - mastodon-network
+    volumes:
+      - mastodon-public-data:/mastodon/public/system
+    healthcheck:
+      test: ['CMD-SHELL', "ps aux | grep '[s]idekiq\ 6' || false"]
+    deploy:
+      mode: replicated
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+    environment:
+      LOCAL_DOMAIN: ${LOCAL_DOMAIN}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE} 
+      OTP_SECRET: ${OTP_SECRET}
+      DB_HOST: 'postgres'
+      DB_PASS: ${POSTGRES_PASSWORD}
+      DB_USER: ${POSTGRES_USER}
+      DB_NAME: ${POSTGRES_DB}
+      DB_PORT: 5432
+      # SMTP settings
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_LOGIN: ${SMTP_LOGIN}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_ADDRES: ${SMTP_FROM_ADDRESS}
+      # File settings
+      S3_ENABLED: ${S3_ENABLED}
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_ALIAS_HOST: ${S3_ALIAS_HOST}
+      # Vapid
+      # Generate with `rake mastodon:webpush:generate_vapid_key`
+      # docker run -it tootsuite/mastodon bundle exec rake mastodon:webpush:generate_vapid_key
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}  
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  ## Uncomment to enable federation with tor instances along with adding the following ENV variables
+  ## http_proxy=http://privoxy:8118
+  ## ALLOW_ACCESS_TO_HIDDEN_SERVICE=true
+  # tor:
+  #   image: sirboops/tor
+  #   networks:
+  #      - public-network
+  #      - mastodon-network
+  #
+  # privoxy:
+  #   image: sirboops/privoxy
+  #   volumes:
+  #     - ./priv-config:/opt/config
+  #   networks:
+  #     - public-network
+  #     - mastodon-network
+
+networks:
+  public-network:
+    external: true
+  mastodon-network:
+    internal: true
+
+
+volumes:
+  postgres-data:
+  redis-data:
+  mastodon-public-data:
+
