@@ -242,12 +242,12 @@
         {
           "label": "SMTP_SERVER",
           "name": "SMTP_SERVER",
-          "description": "Email serveer",
+          "description": "Email serveer"
         },
         {
           "label": "SMTP_PORT",
           "name": "SMTP_PORT",
-          "description": "Email server port",
+          "description": "Email server port"
         },
         {
           "label": "SMTP_LOGIN",
