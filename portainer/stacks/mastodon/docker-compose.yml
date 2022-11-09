@@ -155,12 +155,8 @@ services:
       labels:
         - traefik.enable=true
         - traefik.http.services.${UNIQUE_INSTANCE_NAME}-streaming.loadbalancer.server.port=4000
-        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.rule=Host(`${LOCAL_DOMAIN}`) && PathPrefix(`/api/v1/streaming`))
-        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.entrypoints=http,https
-        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-streaming-redirect-to-https.redirectscheme.scheme=https
-        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-streaming-redirect-to-https.redirectscheme.permanent=true
-        - traefik.http.middlewares.${UNIQUE_INSTANCE_NAME}-streaming-compression.compress=true
-        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.middlewares=${UNIQUE_INSTANCE_NAME}-streaming-redirect-to-https,${UNIQUE_INSTANCE_NAME}-streaming-compression
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.rule=Host(`${LOCAL_DOMAIN}`) && PathPrefix(`/api/v1/streaming`)
+        - traefik.http.routers.${UNIQUE_INSTANCE_NAME}-streaming.entrypoints=https
       update_config:
         parallelism: 1
         delay: 10s
