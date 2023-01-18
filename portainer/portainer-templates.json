@@ -348,8 +348,7 @@
         {
           "label": "EMAIL_HOST_USER",
           "name": "EMAIL_HOST_USER",
-          "description": "Email server host to send emails. (eg. SendGrid)",
-          "default": "User for the email sending server"
+          "description": "User for the email sending serve (eg. SendGrid)"
         },
         {
           "label": "EMAIL_HOST_PASSWORD",
