@@ -1,0 +1,70 @@
+
+   
+version: "3.7"
+services:
+  shynet:
+    container_name: shynet_main
+    image: milesmcc/shynet:latest
+    restart: unless-stopped
+    expose:
+      - 8080
+    environment:
+      DB_HOST: db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      EMAIL_PORT: ${EMAIL_PORT:-465}
+      SERVER_EMAIL: shynet@${BASE_URL}
+      ALLOWED_HOSTS: ${BASE_URL}
+      CSRF_TRUSTED_ORIGINS: https://${BASE_URL}
+      ACCOUNT_SIGNUPS_ENABLED: ${ACCOUNT_SIGNUPS_ENABLED:-False}
+      TIME_ZONE: ${TIME_ZONE:-UTC}
+      ONLY_SUPERUSERS_CREATE: ${ONLY_SUPERUSERS_CREATE:-True}
+    networks:
+      - internal-network
+      - public-network
+    depends_on:
+      - db
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.shynet.loadbalancer.server.port=8080
+        - traefik.http.routers.shynet.rule=Host(`${BASE_URL}`)
+        - traefik.http.routers.shynet.entrypoints=http,https
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+
+  db:
+    container_name: shynet_database
+    image: postgres
+    restart: always
+    environment:
+      - "POSTGRES_USER=${DB_USER}"
+      - "POSTGRES_PASSWORD=${DB_PASSWORD}"
+      - "POSTGRES_DB=${DB_NAME}"
+    volumes:
+      - shynet_db:/var/lib/postgresql/data
+    networks:
+      - internal-network
+
+volumes:
+  shynet_db:
+
+networks:
+  internal-network:
+  public-network:
+    name: public-network
+    external: true

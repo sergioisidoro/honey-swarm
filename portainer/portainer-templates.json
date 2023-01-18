@@ -296,6 +296,91 @@
           "description": "Vapid push notification public key"
         }
       ]
+    },
+    {
+      "type": 2,
+      "title": "Shynet Analytics",
+      "description": "Modern, privacy-friendly, and cookie-free web analytics.",
+      "note": "To generate a super user, run './manage.py registeradmin <your email>' in the web container.",
+      "categories": [
+        "analytics"
+      ],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/shynet.png",
+      "repository": {
+        "url": "https://github.com/sergioisidoro/honey-swarm",
+        "stackfile": "portainer/stacks/shynet/docker-compose.yml"
+      },
+      "env": [
+        {
+          "label": "BASE_URL",
+          "name": "BASE_URL",
+          "description": "Base URL for the service, (Eg analytics.your-domain.app)"
+        },
+        {
+          "label": "DB_USER",
+          "name": "DB_USER",
+          "description": "Database user",
+          "default": "shynet"
+        },
+        {
+          "label": "DB_PASSWORD",
+          "name": "DB_PASSWORD",
+          "description": "Database password",
+          "default": "shynet"
+        },
+        {
+          "label": "DB_NAME",
+          "name": "DB_NAME",
+          "description": "Database name",
+          "default": "shynet"
+        },
+        {
+          "label": "DJANGO_SECRET_KEY",
+          "name": "DJANGO_SECRET_KEY",
+          "description": "A string of random digits to keep your application secure"
+        },
+        {
+          "label": "EMAIL_HOST",
+          "name": "EMAIL_HOST",
+          "description": "Email server host to send emails. (eg. SendGrid)"
+        },
+        {
+          "label": "EMAIL_HOST_USER",
+          "name": "EMAIL_HOST_USER",
+          "description": "Email server host to send emails. (eg. SendGrid)",
+          "default": "User for the email sending server"
+        },
+        {
+          "label": "EMAIL_HOST_PASSWORD",
+          "name": "EMAIL_HOST_PASSWORD",
+          "description": "Password for the email sending server (eg. Sendgrid)"
+        },
+        {
+          "label": "EMAIL_PORT",
+          "name": "EMAIL_PORT",
+          "description": "Port of the email server (eg. Sendgrid)",
+          "default": "465"
+        },
+        {
+          "label": "ACCOUNT_SIGNUPS_ENABLED",
+          "name": "ACCOUNT_SIGNUPS_ENABLED",
+          "description": "Can anyone register to this service page?",
+          "default": "False"
+        },
+        {
+          "label": "ONLY_SUPERUSERS_CREATE",
+          "name": "ONLY_SUPERUSERS_CREATE",
+          "description": "If true only superusers can create a project/site to be tracked. If false, any user can create a site.",
+          "default": "True"
+        },
+        {
+          "label": "TIME_ZONE",
+          "name": "TIME_ZONE",
+          "description": "This must match a value from the IANA's tz database. Wikipedia has a list of valid strings: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones",
+          "default": "UTC"
+        }
+      ]
     }
   ]
 }
