@@ -1,37 +1,37 @@
 x-env: &env
-  environment:
-    WEBLATE_SITE_DOMAIN: ${BASE_URL}
-    WEBLATE_DEBUG: 0
-    WEBLATE_LOGLEVEL: INFO
-    WEBLATE_SITE_TITLE: Weblate
-    WEBLATE_ADMIN_NAME: Weblate Admin
-    WEBLATE_ADMIN_EMAIL: ${ADMIN_EMAIL}
-    WEBLATE_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-    WEBLATE_SERVER_EMAIL: ${EMAIL_FROM}
-    WEBLATE_DEFAULT_FROM_EMAIL: ${EMAIL_FROM}
-    WEBLATE_ALLOWED_HOSTS: "*"
-    WEBLATE_REGISTRATION_OPEN: 1
 
-    POSTGRES_PASSWORD: ${DB_PASSWORD}
-    POSTGRES_USER: ${DB_USER}
-    POSTGRES_DATABASE: ${DB_NAME}
-    POSTGRES_HOST: database
-    POSTGRES_PORT: 5432
-    WEBLATE_EMAIL_HOST: ${EMAIL_HOST}
-    WEBLATE_EMAIL_HOST_USER: ${EMAIL_HOST_USER}
-    WEBLATE_EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
-    WEBLATE_EMAIL_PORT: ${EMAIL_PORT:-465}
-    REDIS_HOST: cache
-    REDIS_PORT: 6379
-    WEBLATE_TIME_ZONE: ${TIME_ZONE}
-    # TODO
-    WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_KEY: ""
-    WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET: ""
 
 version: '3'
 services:
   weblate:
-    <<: *env
+    environment: &weblate-env
+      WEBLATE_SITE_DOMAIN: ${BASE_URL}
+      WEBLATE_DEBUG: 0
+      WEBLATE_LOGLEVEL: INFO
+      WEBLATE_SITE_TITLE: Weblate
+      WEBLATE_ADMIN_NAME: Weblate Admin
+      WEBLATE_ADMIN_EMAIL: ${ADMIN_EMAIL}
+      WEBLATE_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      WEBLATE_SERVER_EMAIL: ${EMAIL_FROM}
+      WEBLATE_DEFAULT_FROM_EMAIL: ${EMAIL_FROM}
+      WEBLATE_ALLOWED_HOSTS: "*"
+      WEBLATE_REGISTRATION_OPEN: 1
+
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DATABASE: ${DB_NAME}
+      POSTGRES_HOST: database
+      POSTGRES_PORT: 5432
+      WEBLATE_EMAIL_HOST: ${EMAIL_HOST}
+      WEBLATE_EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      WEBLATE_EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      WEBLATE_EMAIL_PORT: ${EMAIL_PORT:-465}
+      REDIS_HOST: cache
+      REDIS_PORT: 6379
+      WEBLATE_TIME_ZONE: ${TIME_ZONE}
+      # TODO
+      WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_KEY: ""
+      WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET: ""
     image: weblate/weblate
     tmpfs:
       - /run
@@ -49,10 +49,10 @@ services:
       - traefik.http.routers.shynet.rule=Host(`${BASE_URL}`)
       - traefik.http.routers.shynet.entrypoints=http,https
   database:
-    <<: *env
     image: postgres:15-alpine
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    environment: *weblate-env
     restart: always
   cache:
     image: redis:7-alpine
