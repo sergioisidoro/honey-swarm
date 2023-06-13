@@ -64,6 +64,12 @@
           "label": "Postgres password",
           "description": "Password to access the database",
           "default": "plausible"
+        },
+        {
+          "name": "WEBLATE_REGISTRATION_OPEN",
+          "label": "Weblate registration open",
+          "description": "If true, allows users to register on weblate",
+          "default": "0"
         }
       ]
     },

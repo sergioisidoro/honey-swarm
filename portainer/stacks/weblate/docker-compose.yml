@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 services:
   weblate:
     environment: &weblate-env
@@ -12,7 +12,8 @@ services:
       WEBLATE_SERVER_EMAIL: ${EMAIL_FROM}
       WEBLATE_DEFAULT_FROM_EMAIL: ${EMAIL_FROM}
       WEBLATE_ALLOWED_HOSTS: "*"
-      WEBLATE_REGISTRATION_OPEN: 1
+      WEBLATE_REGISTRATION_OPEN: ${WEBLATE_REGISTRATION_OPEN:-0}
+      WEBLATE_REQUIRE_LOGIN: ${WEBLATE_REQUIRE_LOGIN:-1}
 
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_USER: ${DB_USER}
@@ -40,17 +41,34 @@ services:
     depends_on:
       - database
       - cache
-    labels:
-      - traefik.enable=true
-      - traefik.http.services.shynet.loadbalancer.server.port=8080
-      - traefik.http.routers.shynet.rule=Host(`${BASE_URL}`)
-      - traefik.http.routers.shynet.entrypoints=http,https
+    networks:
+      - public-network
+      - internal-network
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.weblate.loadbalancer.server.port=8080
+        - traefik.http.routers.weblate.rule=Host(`${BASE_URL}`)
+        - traefik.http.routers.weblate.entrypoints=http,https
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
   database:
     image: postgres:15-alpine
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment: *weblate-env
     restart: always
+    networks:
+      - internal-network
   cache:
     image: redis:7-alpine
     restart: always
@@ -58,9 +76,18 @@ services:
     command: [redis-server, --save, '60', '1']
     volumes:
       - redis-data:/data
+    networks:
+      - internal-network
       
 volumes:
   weblate-cache: {}
   weblate-data: {}
   postgres-data: {}
   redis-data: {}
+
+
+networks:
+  internal-network:
+  public-network:
+    name: public-network
+    external: true
