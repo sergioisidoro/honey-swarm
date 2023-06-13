@@ -1,0 +1,69 @@
+x-env: &env
+  environment:
+    WEBLATE_SITE_DOMAIN: ${BASE_URL}
+    WEBLATE_DEBUG: 0
+    WEBLATE_LOGLEVEL: INFO
+    WEBLATE_SITE_TITLE: Weblate
+    WEBLATE_ADMIN_NAME: Weblate Admin
+    WEBLATE_ADMIN_EMAIL: ${ADMIN_EMAIL}
+    WEBLATE_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    WEBLATE_SERVER_EMAIL: ${EMAIL_FROM}
+    WEBLATE_DEFAULT_FROM_EMAIL: ${EMAIL_FROM}
+    WEBLATE_ALLOWED_HOSTS: "*"
+    WEBLATE_REGISTRATION_OPEN: 1
+
+    POSTGRES_PASSWORD: ${DB_PASSWORD}
+    POSTGRES_USER: ${DB_USER}
+    POSTGRES_DATABASE: ${DB_NAME}
+    POSTGRES_HOST: database
+    POSTGRES_PORT: 5432
+    WEBLATE_EMAIL_HOST: ${EMAIL_HOST}
+    WEBLATE_EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+    WEBLATE_EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+    WEBLATE_EMAIL_PORT: ${EMAIL_PORT:-465}
+    REDIS_HOST: cache
+    REDIS_PORT: 6379
+    WEBLATE_TIME_ZONE: ${TIME_ZONE}
+    # TODO
+    WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_KEY: ""
+    WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET: ""
+
+version: '3'
+services:
+  weblate:
+    <<: *env
+    image: weblate/weblate
+    tmpfs:
+      - /run
+      - /tmp
+    volumes:
+      - weblate-data:/app/data
+      - weblate-cache:/app/cache
+    restart: always
+    depends_on:
+      - database
+      - cache
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.shynet.loadbalancer.server.port=8080
+      - traefik.http.routers.shynet.rule=Host(`${BASE_URL}`)
+      - traefik.http.routers.shynet.entrypoints=http,https
+  database:
+    <<: *env
+    image: postgres:15-alpine
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: always
+  cache:
+    image: redis:7-alpine
+    restart: always
+    read_only: true
+    command: [redis-server, --save, '60', '1']
+    volumes:
+      - redis-data:/data
+      
+volumes:
+  weblate-cache: {}
+  weblate-data: {}
+  postgres-data: {}
+  redis-data: {}

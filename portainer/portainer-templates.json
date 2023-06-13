@@ -380,6 +380,97 @@
           "default": "UTC"
         }
       ]
+    },
+    {
+      "type": 2,
+      "title": "Weblate Translation management",
+      "description": "Copylefted libre software, used by over 2,500 libre software projects and companies in over 165 countries.",
+      "categories": [
+        "i18n"
+      ],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/sergioisidoro/honey-swarm/master/portainer/logos/weblate.png",
+      "repository": {
+        "url": "https://github.com/sergioisidoro/honey-swarm",
+        "stackfile": "portainer/stacks/weblate/docker-compose.yml"
+      },
+      "env": [
+        {
+          "label": "BASE_URL",
+          "name": "BASE_URL",
+          "description": "Base URL for the service, (Eg analytics.your-domain.app)"
+        },
+        {
+          "label": "DB_USER",
+          "name": "DB_USER",
+          "description": "Database user",
+          "default": "weblate"
+        },
+        {
+          "label": "DB_PASSWORD",
+          "name": "DB_PASSWORD",
+          "description": "Database password",
+          "default": "weblate"
+        },
+        {
+          "label": "DB_NAME",
+          "name": "DB_NAME",
+          "description": "Database name",
+          "default": "weblate"
+        },
+        {
+          "label": "ADMIN_EMAIL",
+          "name": "ADMIN_EMAIL",
+          "description": "Administrator email"
+        },
+        {
+          "label": "ADMIN_PASSWORD",
+          "name": "ADMIN_PASSWORD",
+          "description": "Administrator password"
+        },
+        {
+          "label": "EMAIL_FROM",
+          "name": "EMAIL_FROM",
+          "description": "Sender of emails (eg info@yourdomain.com)"
+        },
+        {
+          "label": "EMAIL_HOST",
+          "name": "EMAIL_HOST",
+          "description": "Email server host to send emails. (eg. SendGrid)"
+        },
+        {
+          "label": "EMAIL_HOST_USER",
+          "name": "EMAIL_HOST_USER",
+          "description": "User for the email sending serve (eg. SendGrid)"
+        },
+        {
+          "label": "EMAIL_HOST_PASSWORD",
+          "name": "EMAIL_HOST_PASSWORD",
+          "description": "Password for the email sending server (eg. Sendgrid)"
+        },
+        {
+          "label": "EMAIL_PORT",
+          "name": "EMAIL_PORT",
+          "description": "Port of the email server (eg. Sendgrid)",
+          "default": "465"
+        },
+        {
+          "label": "TIME_ZONE",
+          "name": "TIME_ZONE",
+          "description": "This must match a value from the IANA's tz database. Wikipedia has a list of valid strings: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones",
+          "default": "UTC"
+        },
+        {
+          "label": "WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_KEY",
+          "name": "WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_KEY",
+          "description": "Optional OAUTH2 for google login - Key"
+        },
+        {
+          "label": "WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET",
+          "name": "WEBLATE_SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET",
+          "description": "Optional OAUTH2 for google login - Secret"
+        }
+      ]
     }
   ]
 }
