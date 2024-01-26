@@ -5,9 +5,8 @@
   import_role:
     name: geerlingguy.docker
 
-- name: Install pip deps
-  become: yes
-  pip:
+- name: Install python docker
+  become: true
+  package:
     name:
-      - docker
-    state: present
+      - python3-docker

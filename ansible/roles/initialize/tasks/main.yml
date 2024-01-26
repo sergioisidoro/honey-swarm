@@ -3,10 +3,8 @@
   become: true
   package:
     name:
-      - python3-pip
-      - python3-virtualenv
       - python3-dev
-      - virtualenv
+      - python3-jsondiff
     state: present
     update_cache: yes
 
@@ -16,13 +14,6 @@
     name: "{{ item }}"
     state: present
   with_items: "{{ additional_packages }}"
-
-- name: Install pip deps
-  become: yes
-  pip:
-    name:
-      - jsondiff
-    state: present
 
 - name: Create locales
   locale_gen:
