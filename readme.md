@@ -20,7 +20,7 @@ This is heavily inspired and a lot of things replicated from [TADS Boilerplate p
 
 ## Important notes
 - `public-network` is the network all services need to be if you want them public so Traefik can find them.
-- It is strongly advised to put Portainer behind a VPN or internal network. To block access from the internet, you can add `internal_services_ip_whitelist` to the variables, allowing only certain IPs. If you're using Tailscale you could do `internal_services_ip_whitelist="100.64.0.0/10"` such that only devices and nodes in that network can communicate with the web interfaces.
+- It is strongly advised to put Portainer behind a VPN or internal network. To block access from the internet, you can add `internal_services_ip_whitelist` to the variables, allowing only certain IPs.
 - Remember to put annotations on the `deploy` section so that Traefik can find your services across all nodes.
 - By default all non necessary incoming ports are CLOSED in the firewall. SSH is limited. If you want to open other ports
   - set `default_ufw_default_inbound_rule: 'allow'` on your cluster variables to accept traffic from any port - SCARY
