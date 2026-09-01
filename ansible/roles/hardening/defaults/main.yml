@@ -7,6 +7,16 @@ default_ufw_default_inbound_rule: 'deny' # or 'allow'
 default_ufw_default_outbound_rule: 'allow' # or 'deny'
 ssh_port: 22
 
+# Docker Swarm ports - these are restricted to cluster nodes only
+# https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts
+# https://www.digitalocean.com/community/tutorials/how-to-configure-the-linux-firewall-for-docker-swarm-on-ubuntu-16-04
+docker_swarm_ports:
+  - { port: '2377', proto: 'tcp' }       # cluster management communications
+  - { port: '7946' }                      # communication among nodes (TCP+UDP)
+  - { port: '4789', proto: 'udp' }       # overlay network traffic
+  - { port: '2376', proto: 'tcp' }       # secure Docker client communication (Docker Machine)
+  - { port: '9001', proto: 'tcp' }       # Portainer node communication
+
 ufw_extra_rules: []
   # - rule: 'allow'
   #   port: '443'

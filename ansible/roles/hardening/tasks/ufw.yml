@@ -21,22 +21,44 @@
     - restart ufw
 
 # These are VERY verbose, so that even if you decide to block outgoing traffic, things will still work.
-- name: Configure ufw rules for Docker, Docker swarm and SENSIBLE basic services
+- name: Configure ufw rules for SSH and basic services
   ufw: "{{item}}"
   with_items:
     - { rule: 'limit', port: '{{ ssh_port | default("22") }}', proto: 'tcp' }
-    # https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts
-    - { rule: 'allow', port: '2377', proto: 'tcp' }       ## for cluster management communications -- ONLY NEEDED ON MANAGERS - TODO, REMOVE ON NON MANAGER NODES
-    - { rule: 'allow', port: '7946' }                     ## for communication among nodes
-    - { rule: 'allow', port: '4789', proto: 'udp' }       ## for overlay network traffic
-    # https://www.digitalocean.com/community/tutorials/how-to-configure-the-linux-firewall-for-docker-swarm-on-ubuntu-16-04
-    - { rule: 'allow', port: '2376', proto: 'tcp' }       ## for secure Docker client communication. This port is required for Docker Machine to work. Docker Machine is used to orchestrate Docker hosts.
     # BASIC SERVICES
     - { rule: 'allow', port: '50' }                       ## IP sec ESP
     - { rule: 'allow', port: '53' }                       ## For DNS
     - { rule: 'allow', port: 'http' }                     ## For HTTP
     - { rule: 'allow', port: 'https' }                    ## For HTTPS
-    - { rule: 'allow', port: '9001'}                      ## For Portainer node communication
+  notify:
+    - restart ufw
+
+# Docker Swarm ports - restricted to cluster nodes only
+# https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts
+- name: Configure ufw rules for Docker Swarm ports (from cluster node public IPs)
+  ufw:
+    rule: allow
+    port: "{{ item.1.port }}"
+    proto: "{{ item.1.proto | default(omit) }}"
+    from_ip: "{{ hostvars[item.0].ansible_host }}"
+  loop: "{{ groups['nodes'] | product(docker_swarm_ports) | list }}"
+  loop_control:
+    label: "{{ item.1.port }} from {{ hostvars[item.0].ansible_host }}"
+  notify:
+    - restart ufw
+
+- name: Configure ufw rules for Docker Swarm ports (from cluster node internal IPs)
+  ufw:
+    rule: allow
+    port: "{{ item.1.port }}"
+    proto: "{{ item.1.proto | default(omit) }}"
+    from_ip: "{{ hostvars[item.0].dockerswarm_advertise_addr }}"
+  loop: "{{ groups['nodes'] | product(docker_swarm_ports) | list }}"
+  when: >
+    hostvars[item.0].dockerswarm_advertise_addr is defined and
+    hostvars[item.0].dockerswarm_advertise_addr != hostvars[item.0].ansible_host
+  loop_control:
+    label: "{{ item.1.port }} from {{ hostvars[item.0].dockerswarm_advertise_addr | default('N/A') }}"
   notify:
     - restart ufw
 
