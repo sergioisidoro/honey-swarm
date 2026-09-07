@@ -14,17 +14,31 @@ additional_packages:
 
 # swap_file_size_mb: 1024
 
+
 ## USERS
 ## -----------------------------------------------------------------------
 ## Add the names of the users who will have root ssh access to all nodes,
 ## and then add a public key to pubkeys with the file named for each user
 
 # users: &USERS
-#  - sergio
+#  - your-admin-user
 
 ## Which users have access to docker? Use the line bellow so all
 ## users specified above have access
 # docker_users: *USERS
+
+## Accounts to actively REVOKE on every run. The user block above only ever
+## ADDS, so removing a name from `users` stops managing that account but leaves
+## the node untouched -- authorized_keys, the NOPASSWD sudoers drop-in, group
+## memberships and the login shell all survive. For someone who has left, that
+## is exactly the case that matters, so it has to be listed explicitly here.
+##
+## Revoking moves the account onto its own private group (on many images `sudo`
+## is the PRIMARY group, which a secondary-group strip cannot remove), sets
+## /usr/sbin/nologin and locks the password. The account and its home directory
+## are deliberately KEPT -- deleting a user orphans any files they own.
+# deprovisioned_users:
+#   - someone-who-left
 
 ## CLOUD PROVIDERS
 ## -----------------------------------------------------------------------
@@ -39,6 +53,16 @@ additional_packages:
 # hetzner_volumes:
 #   - volume_id: scsi-0HC_Volume_1234567
 #     mount_point: /mnt/external-volume
+
+## Format a BLANK volume before mounting it. OFF by default, and guarded: the
+## role only formats a device whose probe reports no filesystem signature at
+## all, and passes force:false so it can never overwrite an existing one. Pass
+## it on the single run that builds a new node rather than setting it here:
+##
+##   ansible-playbook ... provision.yml -e digital_ocean_volume_format=true
+##
+# digital_ocean_volume_format: false
+# hetzner_volume_format: false
 
 
 ## DOCKER
@@ -83,9 +107,63 @@ traefik_dashboard_enabled: false
 ## CORE
 deploy_portainer: true
 
-# Customize Portainer images
-# portainer_image: "portainer/portainer-ee"
-# portainer_agent_image: "portainer/agent"
+# Customize Portainer images. PIN THESE. Left untagged they resolve to :latest,
+# and the docker-stack role deploys with `resolve_image: always`, so every run
+# of 04-update-stacks.yml silently moves Portainer to whatever is newest. That
+# is how a node ends up several minor versions ahead of what anyone chose, on an
+# app that migrates its data volume on startup and has no downgrade path. Bump
+# them together and on purpose -- the agent must match the server.
+# portainer_image: "portainer/portainer-ce:2.45.0"
+# portainer_agent_image: "portainer/agent:2.45.0"
 
 ## SECURITY
 disable_password_ssh: true
+
+## SSH ACCESS
+## -----------------------------------------------------------------------
+## Full explanation in roles/hardening/defaults/main.yml. One flag:
+##   enable_root_ssh: true   -> PermitRootLogin prohibit-password,
+##                              Ansible connects as root            (CURRENT)
+##   enable_root_ssh: false  -> PermitRootLogin no,
+##                              Ansible connects as ssh_admin_user + sudo
+## Ordered cutover runbook: readme.md, "Closing root SSH".
+enable_root_ssh: true
+# ssh_admin_user: your-admin-user   # must be in `users` and have pubkeys/<name>
+## Verification hatch ONLY: connect as the named user while root SSH is still
+## open, to prove sudo escalation works before removing the fallback.
+# ssh_connection_user_override: your-admin-user
+
+## Derived connection settings.
+## These MUST live here rather than in a role's defaults/: role defaults are the
+## lowest precedence and are additionally outranked by the imported
+## geerlingguy.* roles' own defaults. The inventory must also NOT carry an
+## `ansible_user=` token, because inventory host vars beat group vars and would
+## silently pin the connection to root, making enable_root_ssh inert.
+ansible_user: >-
+  {{ ssh_connection_user_override
+     | default(('root' if enable_root_ssh | bool else ssh_admin_user), true) }}
+## Always escalate. Connecting as root this is a no-op in effect (root's sudo
+## always succeeds), and it keeps ansible_env.HOME at /root in both modes, so
+## flipping enable_root_ssh does not relocate the docker-stack files under
+## ~/.honey/stacks. Localhost/delegated tasks set `become: false` explicitly.
+ansible_become: true
+
+## HOST FIREWALL
+## -----------------------------------------------------------------------
+## One variable, two named states:
+##   ufw   - UFW is the firewall: rules managed AND enforced.  (current)
+##   cloud - the DigitalOcean cloud firewall is: UFW disabled, but its rules
+##           are still kept current so `ufw enable` is a one-command rollback.
+## Do not switch to `cloud` until the DO firewall is created, attached and
+## verified. Full ordered runbook (and the lockout warning) lives in
+## readme.md.
+hardening_firewall: ufw
+
+## Source-restrict SSH while UFW is still the firewall. Empty list = 22/tcp open
+## to the world but rate-limited (`ufw limit`) and policed by fail2ban. Fill this
+## with the admin/office/VPN egress addresses; the SAME list is what the DO cloud
+## firewall's inbound SSH rule should carry after the cutover.
+## Adding addresses here does not remove the world-open rule — see
+## `hardening_ssh_remove_world_open_rule` in roles/hardening/defaults/main.yml.
+hardening_ssh_allowed_ips: []
+# hardening_ssh_remove_world_open_rule: false

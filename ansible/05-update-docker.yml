@@ -1,0 +1,305 @@
+---
+###
+# update-docker playbook
+##
+# The ONLY sanctioned way to move the Docker engine on this cluster.
+#
+# Everything else is deliberately arranged to keep its hands off the runtime:
+# This is NOT the only way Docker gets patched, and it deliberately is not:
+#   * `03-update-nodes.yml` runs `apt upgrade: full` and WILL upgrade docker-ce
+#     as part of routine OS maintenance. That playbook already reboots the node
+#     when required, so it is an already-scheduled downtime window, and it now
+#     verifies the swarm and every service afterwards. That is the routine path.
+#   * `roles/docker` never upgrades the daemon on its own
+#     (docker_packages_state: present), so a `--tags docker` run is safe.
+#
+# THIS playbook is for TARGETED work: an urgent CVE between maintenance windows,
+# moving to a specific pinned version, or rolling back a bad one. It gives you
+# pre/post verification and a known rollback target, which `apt upgrade` does not.
+#
+# WHY THIS NEEDS A WINDOW
+# -----------------------
+# dockerd CANNOT use live-restore in Swarm mode (`--live-restore` is
+# incompatible with swarm). Restarting the daemon therefore STOPS AND RESTARTS
+# EVERY CONTAINER on the node. With one node that is full downtime for the API,
+# Traefik and Portainer — not a rolling update. `serial: 1` below is honest
+# bookkeeping for a future multi-node cluster, not a safety property today.
+#
+# USAGE (the confirmation flag is mandatory, so this cannot run by accident):
+#
+#   # 1. Pre-flight only. Changes nothing. Run this first, read the output.
+#   ansible-playbook -i ansible/clusters/production ansible/05-update-docker.yml \
+#       --tags preflight
+#
+#   # 2. The upgrade itself, to the newest version in the Docker repo:
+#   ansible-playbook -i ansible/clusters/production ansible/05-update-docker.yml \
+#       -e docker_update_confirm=true
+#
+#   # 3. ...or to a specific, known version (preferred - reproducible, and you
+#   #    know exactly what to roll back to):
+#   ansible-playbook -i ansible/clusters/production ansible/05-update-docker.yml \
+#       -e docker_update_confirm=true \
+#       -e docker_target_version='5:27.5.1-1~ubuntu.24.04~noble'
+#
+# ROLLBACK: re-run step 3 with the PREVIOUS version string (printed by the
+# pre-flight and captured in the summary at the end of a run). Docker packages
+# support downgrade; the role passes allow_downgrade. If the daemon will not
+# start at all, see the rollback section of the runbook in readme.md.
+##
+
+- hosts: nodes
+  become: true
+  serial: 1
+  vars:
+    # Refuse to do anything destructive unless explicitly confirmed.
+    docker_update_confirm: false
+    # Empty = newest available in the configured Docker repo.
+    docker_target_version: ""
+    # How long to wait for services to converge after the restart.
+    docker_converge_retries: 30
+    docker_converge_delay: 10
+
+  pre_tasks:
+    - name: Validate SSH access flags before touching the node
+      ansible.builtin.import_tasks: tasks/assert-ssh-access.yml
+
+  tasks:
+
+    ## -----------------------------------------------------------------
+    ## PRE-FLIGHT — read-only state capture. Always runs.
+    ## -----------------------------------------------------------------
+    - name: Pre-flight state capture
+      tags: [preflight, always]
+      block:
+
+        - name: Record installed runtime package versions
+          ansible.builtin.command: >-
+            dpkg-query -W -f=${Package}=${Version}\n
+            docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+          register: docker_pre_versions
+          changed_when: false
+          failed_when: false
+
+        - name: Record the running daemon version
+          ansible.builtin.command: docker version --format '{% raw %}{{.Server.Version}} api={{.Server.APIVersion}}{% endraw %}'
+          register: docker_pre_daemon
+          changed_when: false
+          failed_when: false
+
+        - name: Record swarm node state
+          ansible.builtin.command: docker node ls
+          register: docker_pre_nodes
+          changed_when: false
+          failed_when: false
+
+        - name: Record service replica state
+          ansible.builtin.command: docker service ls --format '{% raw %}{{.Name}} {{.Mode}} {{.Replicas}} {{.Image}}{% endraw %}'
+          register: docker_pre_services
+          changed_when: false
+          failed_when: false
+
+        - name: Record current daemon.json
+          ansible.builtin.slurp:
+            src: /etc/docker/daemon.json
+          register: docker_pre_daemon_json
+          failed_when: false
+
+        - name: Record disk headroom
+          ansible.builtin.command: df -h / /mnt/external-volume
+          register: docker_pre_disk
+          changed_when: false
+          failed_when: false
+
+        - name: PRE-FLIGHT SUMMARY
+          ansible.builtin.debug:
+            msg:
+              - "daemon:    {{ docker_pre_daemon.stdout | default('UNKNOWN') }}"
+              - "packages:  {{ docker_pre_versions.stdout_lines | default([]) }}"
+              - "target:    {{ docker_target_version | default('', true) | ternary(docker_target_version, 'newest available in repo') }}"
+              - "nodes:     {{ docker_pre_nodes.stdout_lines | default([]) }}"
+              - "services:  {{ docker_pre_services.stdout_lines | default([]) }}"
+              - "daemon.json: {{ (docker_pre_daemon_json.content | default('') | b64decode) or 'ABSENT' }}"
+              - "disk:      {{ docker_pre_disk.stdout_lines | default([]) }}"
+              - "ROLLBACK TO: re-run with -e docker_target_version='<the docker-ce version above>'"
+
+        - name: Stop here when only the pre-flight was requested
+          ansible.builtin.meta: end_play
+          when: not (docker_update_confirm | bool)
+
+    ## -----------------------------------------------------------------
+    ## GUARDS — everything below restarts the daemon.
+    ## -----------------------------------------------------------------
+    - name: Assert the upgrade was explicitly confirmed
+      ansible.builtin.assert:
+        that:
+          - docker_update_confirm | bool
+        fail_msg: >-
+          Refusing to upgrade Docker without -e docker_update_confirm=true.
+          This restarts dockerd, which stops and restarts EVERY container on
+          this node (Swarm mode has no live-restore). Run with --tags preflight
+          first.
+        quiet: true
+
+    - name: Assert the swarm is healthy before we touch anything
+      ansible.builtin.assert:
+        that:
+          - docker_pre_nodes.rc == 0
+          - "'Ready' in docker_pre_nodes.stdout"
+        fail_msg: >-
+          Refusing to upgrade: `docker node ls` did not report a Ready node
+          before the upgrade. Fix the swarm first — do not add a daemon restart
+          to an already-broken cluster.
+        quiet: true
+
+    ## -----------------------------------------------------------------
+    ## UPGRADE
+    ## -----------------------------------------------------------------
+    # Holds are OFF by default (see roles/docker/defaults/main.yml). Lift any
+    # that a deliberate freeze put in place, so this playbook can still do its
+    # job during one.
+    - name: Lift any apt hold on the runtime packages
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: install
+      loop: "{{ docker_apt_hold_packages | default(['docker-ce', 'docker-ce-cli', 'containerd.io']) }}"
+      failed_when: false
+
+    - name: Update the apt cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Show the candidate versions apt would install
+      ansible.builtin.command: apt-cache policy docker-ce containerd.io
+      register: docker_candidates
+      changed_when: false
+
+    - name: Candidate versions
+      ansible.builtin.debug:
+        var: docker_candidates.stdout_lines
+
+    - name: Upgrade the Docker engine (THIS RESTARTS EVERY CONTAINER)
+      ansible.builtin.apt:
+        name: "{{ docker_upgrade_packages }}"
+        state: "{{ 'present' if (docker_target_version | length > 0) else 'latest' }}"
+        allow_downgrade: true
+      vars:
+        docker_upgrade_packages: >-
+          {{ ['docker-ce', 'docker-ce-cli']
+             | map('regex_replace', '$', ('=' ~ docker_target_version) if (docker_target_version | length > 0) else '')
+             | list + ['containerd.io'] }}
+      register: docker_upgrade
+
+    # Only re-apply a hold if the cluster actually asked for one. Restoring a
+    # hold that policy says should not exist is how a node silently stops
+    # receiving runtime patches.
+    - name: Re-apply the apt hold (only when docker_apt_hold is set)
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop: "{{ docker_apt_hold_packages | default([]) }}"
+      when: docker_apt_hold | default(false) | bool
+      failed_when: false
+
+    ## -----------------------------------------------------------------
+    ## VERIFY — "dockerd is running" is NOT enough.
+    ## -----------------------------------------------------------------
+    - name: Ensure the docker service is up and enabled
+      ansible.builtin.systemd_service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Wait for the daemon to answer
+      ansible.builtin.command: docker info --format '{% raw %}{{.ServerVersion}}{% endraw %}'
+      register: docker_post_info
+      until: docker_post_info.rc == 0
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Wait for this node to report Ready/Active in the swarm
+      ansible.builtin.command: docker node ls --format '{% raw %}{{.Hostname}} {{.Status}} {{.Availability}} {{.ManagerStatus}}{% endraw %}'
+      register: docker_post_nodes
+      until:
+        - docker_post_nodes.rc == 0
+        - "'Ready Active' in docker_post_nodes.stdout"
+      retries: "{{ docker_converge_retries }}"
+      delay: "{{ docker_converge_delay }}"
+      changed_when: false
+
+    # `docker service ls` prints Replicas as "running/desired". Convergence means
+    # every service has running == desired. The comparison is done in awk so the
+    # exit code is the retry condition — far easier to read (and to trust) than
+    # a multi-line Jinja expression.
+    - name: Wait for every service to converge to its desired replica count
+      ansible.builtin.shell: |
+        set -o pipefail
+        out=$(docker service ls --format '{% raw %}{{.Name}} {{.Replicas}}{% endraw %}')
+        printf '%s\n' "$out"
+        printf '%s\n' "$out" | awk 'NF { split($2, a, "/"); if (a[1] != a[2] || a[2] == 0) exit 1 }'
+      args:
+        executable: /bin/bash
+      register: docker_post_services
+      changed_when: false
+      failed_when: false
+      until: docker_post_services.rc == 0
+      retries: "{{ docker_converge_retries }}"
+      delay: "{{ docker_converge_delay }}"
+
+    - name: Fail if services never converged
+      ansible.builtin.assert:
+        that:
+          - docker_post_services.rc == 0
+        fail_msg: >-
+          Docker came back but at least one service never reached its desired
+          replica count: {{ docker_post_services.stdout_lines | default([]) }}.
+          Check `docker service ps <name> --no-trunc`.
+        quiet: true
+
+    ## OPTIONAL end-to-end check. Restarting dockerd can leave the swarm
+    ## reporting "converged" while the public path is still broken (Traefik
+    ## rescheduled, certificates not loaded, a router not re-registered), so it
+    ## is worth proving the whole chain from outside, not just `service ls`.
+    ##
+    ## Skipped entirely when unset -- there is no URL this project could sensibly
+    ## guess for you. Point it at something cheap that exercises Traefik and one
+    ## real app, host and path, no scheme:
+    ##
+    ##   -e docker_update_healthcheck_url=app.example.com/health
+    - name: Confirm the HTTPS entrypoint is answering through Traefik
+      ansible.builtin.uri:
+        url: "https://{{ docker_update_healthcheck_url }}"
+        method: GET
+        status_code: [200]
+        timeout: 15
+      register: docker_post_health
+      until: docker_post_health.status == 200
+      retries: 10
+      delay: 10
+      failed_when: false
+      check_mode: false
+      when: docker_update_healthcheck_url is defined
+
+    - name: POST-UPGRADE SUMMARY
+      ansible.builtin.debug:
+        msg:
+          - "daemon before: {{ docker_pre_daemon.stdout | default('UNKNOWN') }}"
+          - "daemon after:  {{ docker_post_info.stdout | default('UNKNOWN') }}"
+          - "packages before: {{ docker_pre_versions.stdout_lines | default([]) }}"
+          - "nodes:    {{ docker_post_nodes.stdout_lines | default([]) }}"
+          - "services: {{ docker_post_services.stdout_lines | default([]) }}"
+          - "health:   {{ ('HTTP ' ~ docker_post_health.status) if (docker_update_healthcheck_url is defined and docker_post_health.status is defined) else 'not checked (set docker_update_healthcheck_url to enable)' }}"
+          - "ROLLBACK: re-run with -e docker_update_confirm=true -e docker_target_version='<docker-ce version from packages-before>'"
+
+    - name: Fail loudly if the public health endpoint did not come back
+      ansible.builtin.assert:
+        that:
+          - docker_post_health.status | default(0) == 200
+        fail_msg: >-
+          Docker upgraded and the swarm reports converged, but
+          https://{{ docker_update_healthcheck_url }}
+          did not return 200. Investigate NOW — check `docker service ps` for the
+          failing service and Traefik's logs. Rollback instructions are in the
+          summary above.
+        quiet: true
+      when: docker_update_healthcheck_url is defined

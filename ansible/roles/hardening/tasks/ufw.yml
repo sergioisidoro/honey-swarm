@@ -2,6 +2,12 @@
 
 # to verify ufw configuration run:
 # sudo ufw status verbose
+#
+# This file always runs. `hardening_firewall` decides only whether the rules it
+# maintains are ENFORCED (mode `ufw`) or merely kept up to date on disk while the
+# DigitalOcean cloud firewall does the filtering (mode `cloud`). Keeping the
+# rules current in both modes means re-enabling UFW is one command, not a
+# rebuild. Do NOT delete rules by hand.
 
 - name: Install ufw
   apt: package=ufw state=present
@@ -20,45 +26,106 @@
   notify:
     - restart ufw
 
+## SSH.
+## With no allowlist we keep the historical behaviour: 22/tcp open to the world
+## but rate-limited (`ufw limit` = deny a source that opens >6 connections in
+## 30s) and additionally policed by fail2ban.
+- name: Allow rate-limited SSH from anywhere (no allowlist configured)
+  ufw:
+    rule: 'limit'
+    port: '{{ ssh_port | default("22") }}'
+    proto: 'tcp'
+  when: (hardening_ssh_allowed_ips | default([])) | length == 0
+  notify:
+    - restart ufw
+
+## With an allowlist we ADD per-source rules. The world-open rule above is left
+## in place unless hardening_ssh_remove_world_open_rule is explicitly set — see
+## the lockout warning in defaults/main.yml.
+- name: Allow SSH from the allowlisted admin sources
+  ufw:
+    rule: 'limit'
+    port: '{{ ssh_port | default("22") }}'
+    proto: 'tcp'
+    from_ip: "{{ item }}"
+  with_items: "{{ hardening_ssh_allowed_ips | default([]) }}"
+  when: (hardening_ssh_allowed_ips | default([])) | length > 0
+  notify:
+    - restart ufw
+
+- name: Remove the world-open SSH rule (LOCKOUT RISK - explicit opt-in)
+  ufw:
+    rule: 'limit'
+    port: '{{ ssh_port | default("22") }}'
+    proto: 'tcp'
+    delete: yes
+  when:
+    - (hardening_ssh_allowed_ips | default([])) | length > 0
+    - hardening_ssh_remove_world_open_rule | bool
+  notify:
+    - restart ufw
+
 # These are VERY verbose, so that even if you decide to block outgoing traffic, things will still work.
-- name: Configure ufw rules for SSH and basic services
+- name: Configure ufw rules for SENSIBLE basic services
   ufw: "{{item}}"
   with_items:
-    - { rule: 'limit', port: '{{ ssh_port | default("22") }}', proto: 'tcp' }
-    # BASIC SERVICES
     - { rule: 'allow', port: '50' }                       ## IP sec ESP
     - { rule: 'allow', port: '53' }                       ## For DNS
-    - { rule: 'allow', port: 'http' }                     ## For HTTP
+    ## Port 80 (HTTP) is open BY DESIGN and carries no application traffic.
+    ## Traefik accepts :80 only to (a) answer the Let's Encrypt HTTP-01/ALPN
+    ## challenge and (b) issue an immediate 301 redirect to https://. Every
+    ## application router is bound to the `https` entrypoint; a well-behaved app
+    ## should additionally enforce an HTTPS redirect and HSTS of its own. Closing :80
+    ## would not remove any plaintext data path — it would only turn the
+    ## automatic upgrade into a connection error for anyone typing a bare
+    ## hostname, and break certificate renewal.
+    - { rule: 'allow', port: 'http' }                     ## For HTTP -> 301 to HTTPS only (see above)
     - { rule: 'allow', port: 'https' }                    ## For HTTPS
   notify:
     - restart ufw
 
-# Docker Swarm ports - restricted to cluster nodes only
+# Docker Swarm / overlay / Docker daemon / Portainer agent ports must NOT be
+# exposed to the public internet. By default we only allow them from the other
+# swarm nodes listed in the inventory. Set `restrict_swarm_ports_to_peers: false`
+# to fall back to the old (open to everyone) behaviour.
 # https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts
-- name: Configure ufw rules for Docker Swarm ports (from cluster node public IPs)
+- name: Restrict Docker Swarm ports to swarm peers only
   ufw:
-    rule: allow
-    port: "{{ item.1.port }}"
-    proto: "{{ item.1.proto | default(omit) }}"
-    from_ip: "{{ hostvars[item.0].ansible_host }}"
-  loop: "{{ groups['nodes'] | product(docker_swarm_ports) | list }}"
-  loop_control:
-    label: "{{ item.1.port }} from {{ hostvars[item.0].ansible_host }}"
+    rule: 'allow'
+    port: "{{ item.0.port }}"
+    proto: "{{ item.0.proto | default('any') }}"
+    from_ip: "{{ item.1 }}"
+  with_nested:
+    - "{{ swarm_ports }}"
+    - "{{ swarm_peer_ips | default([]) }}"
+  when: restrict_swarm_ports_to_peers | bool
   notify:
     - restart ufw
 
-- name: Configure ufw rules for Docker Swarm ports (from cluster node internal IPs)
+# UFW rules are additive: earlier provisioning runs opened these swarm ports to
+# the whole world (ALLOW IN Anywhere). Adding the per-peer rules above does NOT
+# remove those, and the broad rules still match first — so we must explicitly
+# delete the legacy world-open rules. The shapes below mirror exactly how the
+# old role created them (no proto on 7946/9001 => "any"). This runs after the
+# restricted rules are in place, so there is never a window with the ports shut.
+- name: Remove legacy world-open Docker Swarm port rules
   ufw:
-    rule: allow
-    port: "{{ item.1.port }}"
-    proto: "{{ item.1.proto | default(omit) }}"
-    from_ip: "{{ hostvars[item.0].dockerswarm_advertise_addr }}"
-  loop: "{{ groups['nodes'] | product(docker_swarm_ports) | list }}"
-  when: >
-    hostvars[item.0].dockerswarm_advertise_addr is defined and
-    hostvars[item.0].dockerswarm_advertise_addr != hostvars[item.0].ansible_host
-  loop_control:
-    label: "{{ item.1.port }} from {{ hostvars[item.0].dockerswarm_advertise_addr | default('N/A') }}"
+    rule: 'allow'
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default(omit) }}"
+    delete: yes
+  with_items: "{{ legacy_swarm_ufw_rules }}"
+  when: restrict_swarm_ports_to_peers | bool
+  notify:
+    - restart ufw
+
+- name: Open Docker Swarm ports to everyone (UNSAFE fallback)
+  ufw:
+    rule: 'allow'
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('any') }}"
+  with_items: "{{ swarm_ports }}"
+  when: not (restrict_swarm_ports_to_peers | bool)
   notify:
     - restart ufw
 
@@ -73,5 +140,16 @@
   notify:
     - restart ufw
 
-- name: Enable ufw
-  ufw: state=enabled
+## The terminal state, derived from the single `hardening_firewall` variable.
+## Only run the `cloud` branch AFTER the DO cloud firewall is created, attached
+## and verified — see the cutover runbook in readme.md. Getting the order wrong
+## on a single-node cluster means either no filtering at all, or no way back in.
+- name: Enforce the UFW rules (hardening_firewall = ufw)
+  ufw:
+    state: enabled
+  when: hardening_firewall == 'ufw'
+
+- name: Stand UFW down, the cloud firewall is authoritative (hardening_firewall = cloud)
+  ufw:
+    state: disabled
+  when: hardening_firewall == 'cloud'

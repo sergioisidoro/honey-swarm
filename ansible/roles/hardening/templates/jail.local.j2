@@ -1,0 +1,37 @@
+# Managed by Ansible (honey-swarm hardening role). Do not edit by hand.
+[DEFAULT]
+# Never ban ourselves: loopback, the swarm peers (inter-node traffic), and the
+# admin source addresses that are allowed through the firewall. Keeping the
+# admin allowlist here means a fat-fingered password/ssh loop from the office
+# cannot lock you out of the cluster.
+ignoreip = 127.0.0.1/8 ::1{% for ip in (swarm_peer_ips | default([])) %} {{ ip }}{% endfor %}{% for ip in (hardening_ssh_allowed_ips | default([])) %} {{ ip }}{% endfor %}
+
+
+bantime  = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+{% if fail2ban_bantime_increment %}
+# Repeat offenders get exponentially longer bans (doubling, capped below).
+bantime.increment = true
+bantime.maxtime = {{ fail2ban_bantime_max }}
+{% endif %}
+# Read auth events from the systemd journal. The journal is the authoritative,
+# 90-day-retained log store on this host (see roles/logging).
+backend  = systemd
+
+[sshd]
+enabled  = true
+port     = {{ ssh_port | default('22') }}
+maxretry = {{ fail2ban_maxretry }}
+
+{% if fail2ban_recidive_enabled %}
+# Bans hosts that keep getting banned by the jails above: 5 bans within a day
+# earns a week off. Uses fail2ban's own log, so it needs the file backend.
+[recidive]
+enabled  = true
+backend  = auto
+logpath  = /var/log/fail2ban.log
+bantime  = 1w
+findtime = 1d
+maxretry = 5
+{% endif %}

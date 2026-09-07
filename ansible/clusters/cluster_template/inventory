@@ -1,7 +1,11 @@
 ## SPECIFY ALL THE NODES HERE
+##
+## NOTE: do NOT put `ansible_user=` here. Inventory host vars beat group
+## vars, so it would silently override the enable_root_ssh-derived
+## connection user in group_vars/all.yml and pin every run to root.
 [nodes]
-node-1 ansible_user=root ansible_host=NODE_IP ansible_port=22
-node-2 ansible_user=root ansible_host=NODE_IP ansible_port=22 dockerswarm_advertise_addr=<INTERNAL_IP>
+node-1 ansible_host=NODE_IP ansible_port=22
+node-2 ansible_host=NODE_IP ansible_port=22 dockerswarm_advertise_addr=<INTERNAL_IP>
 
 [dockerswarm_manager]
 node-1

@@ -3,7 +3,40 @@
 - name: Install fail2ban
   apt: package=fail2ban state=present
 
-#- name: Copy fail2ban default config
-#  template: src=templates/fail2ban.conf.j2 dest=/etc/fail2ban/jail.local
-#  notify:
-#    - restart fail2ban
+# The jail template uses `backend = systemd` (auth events are read from the
+# journal, not /var/log/auth.log — see the logging role: the journal is the
+# 90-day authoritative store). On Debian/Ubuntu that backend needs the
+# python3-systemd bindings; without them the sshd jail fails to start and
+# fail2ban silently protects nothing.
+- name: Install the systemd bindings fail2ban's systemd backend needs
+  apt:
+    name: python3-systemd
+    state: present
+
+- name: Configure fail2ban jail.local (enables the sshd jail)
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - restart fail2ban
+
+- name: Ensure fail2ban is enabled and running
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+
+- name: Report the active fail2ban jails (audit aid)
+  ansible.builtin.command: fail2ban-client status
+  register: fail2ban_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Show the active fail2ban jails
+  ansible.builtin.debug:
+    var: fail2ban_status.stdout_lines
+  when: fail2ban_status.rc == 0

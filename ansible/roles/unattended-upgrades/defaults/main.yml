@@ -1,0 +1,53 @@
+---
+##
+# unattended-upgrades role defaults
+##
+# Automatic security patching. Positive-polarity naming, same convention as
+# `enable_root_ssh`.
+#
+# WHAT THIS ROLE DELIBERATELY DOES NOT DO
+# ---------------------------------------
+# It does not write /etc/apt/apt.conf.d/50unattended-upgrades — the file that
+# decides WHICH packages get upgraded. Debian and Ubuntu both ship a correct
+# Origins-Pattern there, maintained by people who track the archive layout.
+#
+# An earlier revision of this role replaced it with a hand-written
+# Allowed-Origins list carried over from an Ubuntu-shaped template. On Debian
+# that list matched NOTHING. The shorthand
+# `"${distro_id}:${distro_codename}-security"` is an Allowed-Origins entry and
+# matches the Release file's Suite (apt's `a=`), which on Debian is
+# `stable-security`, renaming itself to `oldstable-security` at the next
+# release — never the codename. Measured on a Debian 12 (bookworm) node:
+#
+#   apt-cache policy ->  o=Debian,a=oldstable-security,n=bookworm-security,l=Debian-Security
+#   the shorthand    ->  o=Debian,a=bookworm-security          <- zero matches
+#
+# The node had been patching itself correctly from Debian's default since 2023.
+# Applying that revision would have replaced three years of working automatic
+# patching with a tidy-looking config that upgraded nothing, silently, with the
+# timers still enabled.
+#
+# The lesson is not "write a better origins list". It is "do not take ownership
+# of a file the distribution already gets right". So this role now only ensures
+# patching is INSTALLED, ENABLED and ACTUALLY WORKING, and fails loudly when it
+# is not. To diverge from the distribution default on some future host, add a
+# drop-in under /etc/apt/apt.conf.d/ deliberately, and say why here.
+
+enable_unattended_upgrades: true
+
+## Fail the run if automatic patching is enabled but its origins match no
+## security repository — i.e. it is configured but inert. This is the check that
+## would have caught the bug above, and it keeps working regardless of who owns
+## the config file.
+##
+## Set false only if a repository with "security" in its name is legitimately
+## excluded on some host.
+unattended_upgrades_assert_origins_match: true
+
+## apt periodic timers (days). 1 = daily. These live in 20auto-upgrades, which
+## only switches the automation on — it says nothing about which packages are
+## eligible, so managing it carries none of the risk described above.
+unattended_upgrades_update_package_lists: 1
+unattended_upgrades_download_upgradeable: 1
+unattended_upgrades_run_interval: 1
+unattended_upgrades_autoclean_interval: 7

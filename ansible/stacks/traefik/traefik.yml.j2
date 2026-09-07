@@ -2,8 +2,18 @@ version: '3.7'
 
 services:
   traefik:
-    image: traefik:v3
+    image: traefik:v3.7
+    environment:
+      # Traefik v3's docker/swarm provider otherwise defaults its client to API
+      # 1.24, which modern Docker daemons reject ("client version 1.24 is too
+      # old. Minimum supported API version is 1.40"). Pin it to a version the
+      # daemon accepts. 1.40 is the safe floor; bump to match the daemon's
+      # reported API version if you want newer features
+      # (docker version --format '{{ "{{" }}.Server.APIVersion{{ "}}" }}').
+      - DOCKER_API_VERSION={{ traefik_docker_api_version | default('1.40') }}
     volumes:
+      - certs:/certs
+      - traefik-dynamic-config:/dynamic-config
       - traefik-letsencrypt:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
@@ -20,12 +30,28 @@ services:
 {% if traefik_dashboard_enabled %}
       - --api.dashboard=true
 {% endif %}
-      # In Traefik v3 the Docker provider is split: use the Swarm provider for Docker Swarm
+      # Traefik v3 splits Swarm out into its own provider (the docker provider's
+      # `swarmmode` flag was removed). https://doc.traefik.io/traefik/migration/v2-to-v3/
       - --providers.swarm=true
-      # expose services only when explicitly enabled with labels
-      - --providers.swarm.exposedByDefault=false
+      - --providers.swarm.endpoint=unix:///var/run/docker.sock
+      - --providers.swarm.exposedbydefault=false
       - --providers.swarm.network=public-network
+      - --providers.file.directory=/dynamic-config
       - --entrypoints.http.address=:80
+{% if traefik_http_to_https_redirect | default(true) %}
+      # Port 80 is open ONLY so that a plaintext request can be answered with a
+      # permanent (301) upgrade to https. This is an ENTRYPOINT-level
+      # redirection, so it covers every router bound to `http` — including the
+      # Portainer UI and the Traefik dashboard, which previously served their
+      # login forms over plaintext because they carry no redirect middleware of
+      # their own. Application stacks additionally set a per-router
+      # `redirectscheme` middleware; both are no-ops once the request is https.
+      # ACME uses the TLS-ALPN-01 challenge on :443, so nothing here interferes
+      # with certificate issuance/renewal.
+      - --entrypoints.http.http.redirections.entrypoint.to=https
+      - --entrypoints.http.http.redirections.entrypoint.scheme=https
+      - --entrypoints.http.http.redirections.entrypoint.permanent=true
+{% endif %}
       - --entrypoints.https.address=:443
 {% if letsencrypt %}
       - --entrypoints.https.http.tls=true
@@ -35,6 +61,18 @@ services:
       - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
 {% endif %}
     deploy:
+      # SINGLE-NODE ASSUMPTION: one replica, ports published in `host` mode, and
+      # `certs` / `traefik-letsencrypt` / `traefik-dynamic-config` are LOCAL
+      # named volumes. On a second node this silently changes meaning:
+      #   * host-mode publishing binds :80/:443 only on the node that happens to
+      #     run this replica, so public DNS must point at that node (there is no
+      #     ingress routing mesh in front of it);
+      #   * if the task is rescheduled onto another node it starts with an EMPTY
+      #     ACME store and re-issues every certificate (Let's Encrypt rate
+      #     limits apply), and any manually installed cert in `certs` is gone.
+      # Before adding node 2, either pin Traefik to one node with a placement
+      # constraint + external DNS, or move the ACME store to a shared/replicated
+      # backend.
       replicas: 1
       placement:
         constraints:
@@ -73,4 +111,6 @@ networks:
     external: true
 
 volumes:
+    traefik-dynamic-config:
     traefik-letsencrypt:
+    certs:

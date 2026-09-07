@@ -1,0 +1,110 @@
+---
+
+- name: Install unattended-upgrades
+  become: true
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+  when: enable_unattended_upgrades | bool
+
+## Only the periodic flags are managed here. 50unattended-upgrades — which
+## decides WHICH packages are eligible — is deliberately left to the
+## distribution. See defaults/main.yml for the incident that settled that.
+- name: Configure the apt periodic timers
+  become: true
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  when: enable_unattended_upgrades | bool
+
+- name: Ensure the unattended-upgrades timers are enabled
+  become: true
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  when: enable_unattended_upgrades | bool
+
+## Turning the flag OFF stops the automation but deliberately does NOT uninstall
+## the package — an operator flipping a flag should not silently lose the audit
+## trail of what was configured.
+- name: Disable automatic upgrades (flag is off)
+  become: true
+  ansible.builtin.copy:
+    content: |
+      // Managed by Ansible - automatic upgrades DISABLED
+      // (enable_unattended_upgrades: false)
+      APT::Periodic::Update-Package-Lists "0";
+      APT::Periodic::Download-Upgradeable-Packages "0";
+      APT::Periodic::Unattended-Upgrade "0";
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  when: not (enable_unattended_upgrades | bool)
+
+- name: Check what unattended-upgrades would actually do
+  become: true
+  ansible.builtin.command: unattended-upgrade --dry-run --debug
+  register: uu_dry_run
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: enable_unattended_upgrades | bool
+
+## Read back rather than assert from our own variables: this role does not set
+## the reboot policy, so the only honest way to report it is to ask apt. Unset
+## means unattended-upgrades' own default, which is false.
+- name: Read back the reboot policy actually in effect
+  become: true
+  ansible.builtin.shell: >-
+    apt-config dump | grep -i 'Unattended-Upgrade::Automatic-Reboot '
+    || echo 'Unattended-Upgrade::Automatic-Reboot "false"; (unset, u-u default)'
+  register: uu_reboot_policy
+  changed_when: false
+  check_mode: false
+  when: enable_unattended_upgrades | bool
+
+- name: Report the effective patching policy
+  ansible.builtin.debug:
+    msg:
+      - >-
+        {{ uu_dry_run.stdout_lines | default([])
+           | select('search', 'Allowed origins are:') | list | first
+           | default('NO ORIGINS LINE — unattended-upgrade did not run') }}
+      - >-
+        {{ uu_dry_run.stdout_lines | default([])
+           | select('search', 'No packages found|will be upgraded') | list | last
+           | default('(no verdict line)') }}
+      - "reboot policy: {{ uu_reboot_policy.stdout | default('unknown') | trim }}"
+  when: enable_unattended_upgrades | bool
+
+## The check that would have caught the Ubuntu-shaped-origins bug. u-u's --debug
+## output lists every package file it excluded ("Marking not allowed <...>"); if
+## the security repository is in that list, patching is enabled but inert.
+- name: Assert automatic patching actually covers a security repository
+  ansible.builtin.assert:
+    that:
+      - uu_dry_run.stdout | default('') is search('Allowed origins are:')
+      - not (uu_dry_run.stdout | default('') is search('Marking not allowed.*security'))
+    fail_msg: >-
+      Automatic patching is enabled but matches NO security repository on this
+      host, so it would silently upgrade nothing. Compare the effective pattern
+      (`apt-config dump | grep Origins-Pattern`) against `apt-cache policy`. On
+      Debian the security repo is
+      o=Debian,a=oldstable-security,n=bookworm-security,l=Debian-Security, which
+      only a `codename=`-based Origins-Pattern matches — not an archive-based
+      one. See roles/unattended-upgrades/defaults/main.yml.
+    success_msg: Automatic patching is enabled and covers the security repository.
+    quiet: true
+  when:
+    - enable_unattended_upgrades | bool
+    - unattended_upgrades_assert_origins_match | bool

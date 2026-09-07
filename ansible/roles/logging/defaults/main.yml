@@ -1,0 +1,42 @@
+---
+##
+# logging role defaults — host log retention
+##
+# WHY THIS EXISTS
+# ---------------
+# Nothing in this repo used to configure log retention at all. That meant:
+#   * systemd-journald ran on its stock policy — no time window, and a size cap
+#     derived from the disk (10% of the filesystem), so how far back the auth /
+#     sudo / sshd / fail2ban / docker-daemon history reached was whatever
+#     happened to fit. In practice on a busy node that is days, not months.
+#   * The Docker json-file log driver ran with NO max-size and NO max-file,
+#     i.e. container stdout/stderr grew without bound until the disk filled.
+#
+# We commit to a ~3 month (90 day) security log retention window. That is
+# implemented here as a *journald* retention window, because journald is the
+# only local store that can express "keep 3 months" — the json-file driver only
+# rotates by size, never by age.
+#
+# DISK COST — read this before changing the numbers.
+# The node has a single external volume for /var/lib/docker (data-root) and the
+# root disk for /var/log. The journal is capped by SystemMaxUse, so 3 months of
+# retention is best-effort within that ceiling: journald deletes the oldest
+# entries when EITHER the age limit or the size limit is hit, whichever comes
+# first. With 4G you get 90 days only if the node produces < ~45 MB of journal
+# per day (compressed). If it produces more, you silently get a shorter window —
+# check with `journalctl --disk-usage` and `journalctl --since '90 days ago' -n1`
+# and raise journald_system_max_use (and the volume) if the oldest entry is
+# younger than 90 days.
+
+## journald
+journald_storage: persistent
+journald_compress: 'yes'
+## The retention window we commit to (3 months ~= 90 days).
+journald_max_retention_sec: 3month
+## Hard ceiling on disk used by the journal, and how much free space to leave.
+journald_system_max_use: 4G
+journald_system_keep_free: 2G
+## Cap a single journal file so rotation (and therefore deletion by age) is
+## granular rather than dropping a huge chunk at once.
+journald_system_max_file_size: 256M
+journald_max_file_sec: 1week

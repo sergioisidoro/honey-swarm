@@ -3,21 +3,159 @@
 # hardening role defaults
 ##
 
+## ---------------------------------------------------------------------------
+## HOST FIREWALL  --  see readme.md, "UFW -> DigitalOcean cloud firewall cutover"
+## ---------------------------------------------------------------------------
+##
+## ONE variable with named states, because a firewall is either on or off:
+##
+##   hardening_firewall: ufw     UFW is the firewall. Rules are managed and UFW
+##                               is ENABLED.  (DEFAULT - this is today's state.)
+##
+##   hardening_firewall: cloud   The DigitalOcean cloud firewall is the firewall.
+##                               UFW is DISABLED. The rules are still kept up to
+##                               date in /etc/ufw, so `sudo ufw enable` from the
+##                               recovery console is a one-command rollback to a
+##                               CORRECT rule set rather than a stale one.
+##
+## An earlier revision of this used two booleans, `hardening_ufw_enabled` and
+## `hardening_ufw_disable_after_cloud_firewall`. That was a bad design and is
+## not coming back: the combination `hardening_ufw_enabled: true` +
+## `hardening_ufw_disable_after_cloud_firewall: true` meant UFW was OFF, so the
+## variable that read like "the host firewall is on" did not actually mean that.
+## It is the same polarity trap this role removed from disable_root_ssh --
+## two variables covering one concern is how people end up locked out, or
+## unfiltered, while believing the opposite.
+##
+## DO NOT switch to `cloud` until the DO cloud firewall is created, attached to
+## the host and verified. Getting the order wrong leaves a single-node
+## node either unfiltered (fail-open) or unreachable, with nothing but the DO
+## web recovery console as a way back in.
+hardening_firewall: ufw
+
 default_ufw_default_inbound_rule: 'deny' # or 'allow'
 default_ufw_default_outbound_rule: 'allow' # or 'deny'
 ssh_port: 22
 
-# Docker Swarm ports - these are restricted to cluster nodes only
-# https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts
-# https://www.digitalocean.com/community/tutorials/how-to-configure-the-linux-firewall-for-docker-swarm-on-ubuntu-16-04
-docker_swarm_ports:
-  - { port: '2377', proto: 'tcp' }       # cluster management communications
-  - { port: '7946' }                      # communication among nodes (TCP+UDP)
-  - { port: '4789', proto: 'udp' }       # overlay network traffic
-  - { port: '2376', proto: 'tcp' }       # secure Docker client communication (Docker Machine)
-  - { port: '9001', proto: 'tcp' }       # Portainer node communication
+## SSH source allowlist.
+## Empty (default) => port 22/tcp is reachable from anywhere, rate-limited by
+## `ufw limit` (6 connections / 30s per source) and additionally by fail2ban.
+##
+## Populate it with the office / VPN / admin egress addresses (CIDR allowed) to
+## source-restrict SSH *today*, as the temporary measure until the DO cloud
+## firewall owns this. The exact same list is what you hand to the DO firewall's
+## inbound SSH rule later.
+##
+##   hardening_ssh_allowed_ips:
+##     - 203.0.113.10          # office
+##     - 198.51.100.0/24       # VPN egress range
+##
+## NOTE: adding entries here does NOT remove the pre-existing world-open SSH
+## rule — that would be an instant lockout if any address in the list is wrong
+## or your ISP rotates your IP. Removing it is a separate, explicit flip (below)
+## that you only make AFTER verifying a fresh SSH session from an allowlisted
+## address works.
+hardening_ssh_allowed_ips: []
+hardening_ssh_remove_world_open_rule: false
+
+## Docker Swarm / overlay / Docker daemon / Portainer agent ports.
+## These expose cluster internals and must NOT be reachable from the public
+## internet. When restrict_swarm_ports_to_peers is true (default) they are only
+## opened FROM the addresses of the nodes in the `nodes` inventory group. Set it
+## to false to fall back to opening them to the whole world (not recommended).
+restrict_swarm_ports_to_peers: true
+
+swarm_ports:
+  - { port: '2377', proto: 'tcp' }   ## cluster management communications (managers)
+  - { port: '7946', proto: 'tcp' }   ## communication among nodes
+  - { port: '7946', proto: 'udp' }   ## communication among nodes
+  - { port: '4789', proto: 'udp' }   ## overlay network traffic
+  - { port: '2376', proto: 'tcp' }   ## secure Docker daemon / Docker Machine
+  - { port: '9001', proto: 'tcp' }   ## Portainer agent node communication
+
+## Legacy world-open swarm rules created by earlier provisioning runs, to be
+## removed when restrict_swarm_ports_to_peers is true. These MUST match the exact
+## shape the old role used (7946 and 9001 had no proto => "any") so ufw can find
+## and delete them.
+legacy_swarm_ufw_rules:
+  - { port: '2377', proto: 'tcp' }
+  - { port: '7946' }
+  - { port: '4789', proto: 'udp' }
+  - { port: '2376', proto: 'tcp' }
+  - { port: '9001' }
 
 ufw_extra_rules: []
   # - rule: 'allow'
   #   port: '443'
   #   proto: 'tcp'
+
+## ---------------------------------------------------------------------------
+## fail2ban
+## ---------------------------------------------------------------------------
+fail2ban_bantime: '1h'
+fail2ban_findtime: '10m'
+fail2ban_maxretry: 4
+## Exponential backoff: a repeat offender's ban time doubles each time, capped
+## at fail2ban_bantime_max. Requires fail2ban >= 0.11 (Ubuntu 22.04+ ships 1.0).
+fail2ban_bantime_increment: true
+fail2ban_bantime_max: '1w'
+## The `recidive` jail bans hosts that keep getting banned by other jails.
+fail2ban_recidive_enabled: true
+
+## ---------------------------------------------------------------------------
+## SSH hardening
+## ---------------------------------------------------------------------------
+## ---------------------------------------------------------------------------
+## ROOT SSH  vs  NAMED-USER SSH  --  `enable_root_ssh`
+## ---------------------------------------------------------------------------
+##
+## ONE flag drives both halves of this concern, on purpose:
+##
+##   enable_root_ssh: true   (DEFAULT, today's behaviour)
+##       sshd gets `PermitRootLogin prohibit-password` (key-based root login
+##       works; password root login never does). Ansible connects as root.
+##
+##   enable_root_ssh: false
+##       sshd gets `PermitRootLogin no`. Ansible connects as `ssh_admin_user`
+##       and escalates with sudo.
+##
+## Coupling the two makes the lockout combination *unrepresentable*: you cannot
+## close root login while still connecting as root. That is why there is no
+## separate `disable_root_ssh` / `ssh_permit_root_login` pair any more — two
+## variables in opposite polarity covering one concern is how people lock
+## themselves out. `PermitRootLogin` is derived from this flag, not configurable
+## on its own: the only two states that matter are "key-only root" and "no root",
+## and `prohibit-password` is already implied by `disable_password_ssh: true`.
+##
+## NOTE: the connection half only takes effect because the cluster group_vars
+## derive `ansible_user` from this flag AND the inventory no longer hard-codes
+## `ansible_user=root` as a host var (host vars beat group vars, so that token
+## would silently defeat the flag). See clusters/*/group_vars/all.yml.
+enable_root_ssh: true
+
+## Which named user Ansible connects as when root SSH is closed. MUST be listed
+## in `users` and MUST have a matching public key in ansible/pubkeys/<name> —
+## both are asserted before any play does work (tasks/assert-ssh-access.yml).
+ssh_admin_user: admin
+
+## VERIFICATION HATCH — not a general-purpose knob.
+##
+## Normally the connection user is derived from `enable_root_ssh`. This override
+## exists for exactly one step of the cutover: connect as the named user while
+## root SSH is STILL OPEN, so a full `--check` run can prove that sudo
+## escalation works before the root fallback is removed.
+##
+##   ssh_connection_user_override: admin    # with enable_root_ssh still true
+##
+## Leave it unset the rest of the time. Setting it to `root` while
+## `enable_root_ssh` is false is refused by the assertions — that combination
+## closes root login using the very connection it is closing.
+# ssh_connection_user_override:
+
+ssh_max_auth_tries: 3
+ssh_client_alive_interval: 300
+ssh_client_alive_count_max: 2
+ssh_login_grace_time: 30
+## TCP forwarding is left ON: operators use `ssh -L` tunnels to reach the
+## managed Postgres and the Portainer UI. Agent and X11 forwarding are off.
+ssh_allow_tcp_forwarding: 'yes'
