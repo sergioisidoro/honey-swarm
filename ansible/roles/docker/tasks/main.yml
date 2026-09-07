@@ -1,6 +1,62 @@
 ---
 # We require docker to make this work
 
+## ---------------------------------------------------------------------------
+## Pin geerlingguy.docker's behaviour BEFORE importing it.
+## ---------------------------------------------------------------------------
+## `set_fact` (precedence 19) is used rather than role defaults or
+## `import_role: vars:` because `docker_obsolete_packages` is set by the
+## imported role with `include_vars` (precedence 18), which outranks both.
+## Verified experimentally — see the header of defaults/main.yml. If you move
+## these into defaults/ or group_vars, the obsolete-package override silently
+## stops working and `containerd`/`runc` go back on the removal list.
+- name: Pin the Docker package set, state and obsolete-package list
+  set_fact:
+    docker_packages: >-
+      {{ docker_pinned_packages
+         | map('regex_replace', '^(docker-.*[^=])$',
+               '\1' ~ (('=' ~ docker_ce_version) if (docker_ce_version | length > 0) else ''))
+         | list }}
+    docker_packages_state: "{{ docker_pinned_packages_state }}"
+    docker_obsolete_packages: "{{ docker_safe_obsolete_packages }}"
+    docker_install_compose_plugin: "{{ docker_install_compose_plugin_enabled }}"
+    docker_install_compose: false
+  tags: [docker-packages]
+
+- name: Show the pinned Docker package configuration
+  ansible.builtin.debug:
+    msg: >-
+      packages={{ docker_packages }} state={{ docker_packages_state }}
+      obsolete={{ docker_obsolete_packages }}
+      compose_plugin={{ docker_install_compose_plugin }}
+
+## ---------------------------------------------------------------------------
+## Log retention -> /etc/docker/daemon.json
+## ---------------------------------------------------------------------------
+## geerlingguy.docker renders daemon.json from `docker_daemon_options` and that
+## variable is defined per node in host_vars (data-root on the external volume).
+## Ansible does NOT deep-merge dicts across precedence levels, so the log
+## settings have to be merged explicitly, with host/group vars winning on any
+## key they define.
+##
+## ⚠️ This is the task that restarts Docker. Skip it (`docker_manage_log_options:
+## false` or `--skip-tags docker-logging`) to apply everything else first.
+##
+## ⚠️ geerlingguy.docker writes daemon.json with `copy:`, i.e. it REPLACES the
+## file. Anything hand-edited onto the node that is not represented in
+## `docker_daemon_options` (insecure-registries, dns, storage-driver, ...) will
+## be lost. Capture the current file in the pre-flight before running this.
+- name: Merge log-retention settings into the Docker daemon options
+  set_fact:
+    docker_daemon_options: >-
+      {{ docker_log_daemon_options | combine(docker_daemon_options | default({}, true)) }}
+  when: docker_manage_log_options | bool
+  tags: [docker-logging]
+
+- name: Show the effective Docker daemon options
+  ansible.builtin.debug:
+    var: docker_daemon_options
+
 - name: Installing Docker
   become: true
   import_role:
@@ -11,3 +67,46 @@
   package:
     name:
       - python3-docker
+
+# geerlingguy.docker already adds docker_users to the docker group, but we make
+# it explicit/idempotent here as well. NOTE: docker group membership only takes
+# effect in NEW login sessions — an already-connected user must re-login (or run
+# `newgrp docker`) before `docker` works without sudo.
+- name: Ensure docker_users are members of the docker group
+  become: true
+  user:
+    name: "{{ item }}"
+    groups: docker
+    append: yes
+  with_items: "{{ docker_users | default([]) }}"
+
+## ---------------------------------------------------------------------------
+## Freeze the container runtime against unattended/OS-wide upgrades.
+## ---------------------------------------------------------------------------
+## `dpkg_selections: hold` is honoured by `apt upgrade`, `apt full-upgrade` and
+## unattended-upgrades alike. 05-update-docker.yml lifts the hold, upgrades, and
+## puts it back. Packages that are not installed are skipped rather than failing.
+- name: Check which runtime packages are installed
+  become: true
+  ansible.builtin.command: "dpkg-query -W -f=${Status} {{ item }}"
+  register: docker_pkg_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ docker_apt_hold_packages }}"
+  when: docker_apt_hold | bool
+  tags: [docker-hold]
+
+- name: Hold the container runtime packages at their current versions
+  become: true
+  ansible.builtin.dpkg_selections:
+    name: "{{ item.item }}"
+    selection: hold
+  loop: "{{ docker_pkg_installed.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('') }}"
+  when:
+    - docker_apt_hold | bool
+    - item.stdout is defined
+    - "'install ok installed' in (item.stdout | default(''))"
+  tags: [docker-hold]

@@ -1,10 +1,26 @@
+---
+###
+# update-stacks playbook
+##
+# Re-deploys the critical core infrastructure stacks (Traefik + Portainer) so
+# they pick up new image versions / config changes defined in this repo. The
+# docker-stack role is idempotent and uses rolling update_config, so running
+# this against a live cluster updates the services in place.
+#
+# Update everything:
+#   ansible-playbook -i ansible/clusters/ENVIRONMENT ansible/04-update-stacks.yml
+#
+# Update just one component via tags:
+#   ansible-playbook ... ansible/04-update-stacks.yml --tags stack-traefik
+#   ansible-playbook ... ansible/04-update-stacks.yml --tags portainer
+##
 
 - hosts: dockerswarm_manager[0] # executed on the first Swarm manager
   pre_tasks:
     - name: Validate SSH access flags before touching the node
       ansible.builtin.import_tasks: tasks/assert-ssh-access.yml
 
-    - name: Create Docker public-network network where all apps talk to traefik
+    - name: Ensure the public-network overlay exists
       docker_network:
         name: public-network
         driver: overlay

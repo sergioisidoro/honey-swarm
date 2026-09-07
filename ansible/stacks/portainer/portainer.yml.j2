@@ -17,9 +17,11 @@ services:
   portainer:
     image: {{portainer_image}}
     command: -H tcp://tasks.agent:9001 --tlsskipverify
-    ports:
-      - "9000:9000"
-      - "8000:8000"
+    # No host-published ports on purpose. Docker bypasses UFW when it publishes
+    # ports, which would expose the Portainer UI (9000) directly on the public
+    # IP without TLS. The UI is reachable through Traefik (portainer.{{ domains.main }})
+    # over HTTPS via the labels below. If you use Portainer Edge agents and need
+    # the tunnel, re-add only `target: 8000` bound to a trusted interface.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer-data:/data
@@ -46,6 +48,10 @@ services:
         order: start-first
 
 volumes:
+  # SINGLE-NODE ASSUMPTION: node-local volume. Portainer's users, stack
+  # definitions and webhook ids live here and do NOT move with the service if it
+  # is rescheduled onto another node. It is also NOT captured by this repo — see
+  # the disaster-recovery section of infrastructure/readme.md.
   portainer-data:
 
 networks:

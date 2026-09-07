@@ -1,5 +1,10 @@
 ---
 collections:
+  # ufw / timezone / misc modules used by the hardening role
+  - name: community.general
+  # docker_swarm_info (01-setup-swarm) and docker_stack (docker-stack role) live
+  # here — community.general dropped the docker modules in its 3.0 release.
+  - name: community.docker
   - name: ansible.posix
 
 roles:

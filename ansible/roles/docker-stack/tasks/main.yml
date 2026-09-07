@@ -13,52 +13,68 @@
 
 - name: Create stack configuration directory for {{docker_stack_name}}
   file:
-    path: "{{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}"
+    path: "{{ docker_stack_remote_dir }}"
     state: directory
-    recurse: yes
 
-- name: Copy stack YAML for {{docker_stack_name}}
-  template:
-    src: "{{ docker_stack_yaml_local_path }}"
-    dest: "{{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}/{{ docker_stack_name }}.yml"
-
+# The cluster group_vars set ansible_become: true for the node, and a
+# delegated/local action would otherwise try to sudo on the CONTROL machine.
+#
+# `become: false` ALONE DOES NOT DO THIS. ansible_become is a connection
+# VARIABLE, and variables outrank playbook/task keywords, so the keyword is
+# silently ignored and the module still escalates — failing with
+# "sudo: a password is required" (or prompting, on a control machine whose
+# sudo is not NOPASSWD). Both the keyword and the var override are needed.
+# Same fix as tasks/assert-ssh-access.yml; see the note there.
 - name: Check if we have a setup file for {{docker_stack_name}}
   local_action: stat path={{ docker_stack_setup_local_path }}
+  become: false
+  vars:
+    ansible_become: false
   register: init_file
 
 - name: Copy init file if exists for {{docker_stack_name}}
   template:
     src: "{{ docker_stack_setup_local_path }}"
-    dest: "{{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}/setup_{{ docker_stack_name }}.sh"
+    dest: "{{ docker_stack_remote_dir }}/setup_{{ docker_stack_name }}.sh"
   when: init_file.stat.exists
 
 - name: Copy stack YAML for {{docker_stack_name}}
   template:
     src: "{{ docker_stack_yaml_local_path }}"
-    dest: "{{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}/{{ docker_stack_name }}.yml"
+    dest: "{{ docker_stack_remote_dir }}/{{ docker_stack_name }}.yml"
 
 - name: Test stack resources existance for {{docker_stack_name}}
   stat:
     path: "{{ docker_stack_resources_local_path }}"
   delegate_to: localhost
+  # see the note above - the var override is required, the keyword alone is not
+  become: false
+  vars:
+    ansible_become: false
   register: stat_result
 
 - name: Copy stack resources for {{docker_stack_name}}
   copy:
     src: "{{ docker_stack_resources_local_path }}"
-    dest: "{{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}"
+    dest: "{{ docker_stack_remote_dir }}"
   when: stat_result.stat.exists
 
 - name: Deploy stack for {{docker_stack_name}}
   docker_stack:
     state: present
     name: "{{ docker_stack_name }}"
+    # Swarm has no per-service `pull_policy` (that compose field is ignored by
+    # `docker stack deploy`). `resolve_image` is the equivalent lever: `always`
+    # re-queries the registry and pins the current digest on every deploy, so a
+    # moved tag (e.g. :latest, :stable, or a re-pushed pinned tag) is actually
+    # picked up instead of reusing a stale local image.
+    resolve_image: "{{ docker_stack_resolve_image }}"
     compose:
-    - "{{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}/{{ docker_stack_name }}.yml"
+    - "{{ docker_stack_remote_dir }}/{{ docker_stack_name }}.yml"
   register: stack_deploy
 
 - name: Execute init for {{docker_stack_name}}
-  raw: sh {{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}/setup_{{ docker_stack_name }}.sh
+  raw: sh {{ docker_stack_remote_dir }}/setup_{{ docker_stack_name }}.sh
   when: init_file.stat.exists
 
 - debug:

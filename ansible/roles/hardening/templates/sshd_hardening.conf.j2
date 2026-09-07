@@ -1,0 +1,37 @@
+# Managed by Ansible (honey-swarm hardening role). Do not edit by hand.
+#
+# This file is named 00-* on purpose: sshd keeps the FIRST value it obtains for
+# a keyword, and /etc/ssh/sshd_config Includes /etc/ssh/sshd_config.d/*.conf at
+# the top, in glob order. Sorting first means these values win over the cloud
+# image's 50-cloud-init.conf (which may re-enable password authentication) and
+# over the main sshd_config.
+
+# Key-based authentication only.
+PubkeyAuthentication yes
+{% if disable_password_ssh is defined and disable_password_ssh %}
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+{% endif %}
+PermitEmptyPasswords no
+UsePAM yes
+
+{% if enable_root_ssh | bool %}
+# Root SSH is ENABLED (enable_root_ssh: true). Key-based only — password root
+# login is impossible regardless of this line. Ansible connects as root.
+PermitRootLogin prohibit-password
+{% else %}
+# Root SSH is CLOSED (enable_root_ssh: false). Ansible connects as the named
+# admin user and escalates with sudo. The only remaining root path into this
+# box is the DigitalOcean web recovery console.
+PermitRootLogin no
+{% endif %}
+
+MaxAuthTries {{ ssh_max_auth_tries }}
+LoginGraceTime {{ ssh_login_grace_time }}
+ClientAliveInterval {{ ssh_client_alive_interval }}
+ClientAliveCountMax {{ ssh_client_alive_count_max }}
+
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding {{ ssh_allow_tcp_forwarding }}
+PermitUserEnvironment no

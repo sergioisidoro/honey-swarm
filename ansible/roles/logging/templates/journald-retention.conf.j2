@@ -1,0 +1,17 @@
+# Managed by Ansible (honey-swarm logging role). Do not edit by hand.
+#
+# Host log retention. journald is the authoritative local store for system,
+# auth, sudo, sshd, fail2ban and docker-daemon events, and (when the Docker log
+# driver is set to journald) for container output too.
+#
+# journald prunes on whichever limit is reached FIRST: MaxRetentionSec (age) or
+# SystemMaxUse (size). The size cap is what protects the disk; the age cap is
+# what expires data we no longer need to keep.
+[Journal]
+Storage={{ journald_storage }}
+Compress={{ journald_compress }}
+SystemMaxUse={{ journald_system_max_use }}
+SystemKeepFree={{ journald_system_keep_free }}
+SystemMaxFileSize={{ journald_system_max_file_size }}
+MaxFileSec={{ journald_max_file_sec }}
+MaxRetentionSec={{ journald_max_retention_sec }}

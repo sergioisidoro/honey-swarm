@@ -1,0 +1,98 @@
+---
+##
+# Fail-fast guards for the SSH access flags.
+#
+# Imported into the pre_tasks of every entry-point playbook so a misconfigured
+# flag stops the run at the very beginning, rather than halfway through a
+# hardening play with sshd already half-rewritten.
+#
+# See roles/hardening/defaults/main.yml for what the flags mean.
+##
+
+- name: Validate SSH access configuration
+  run_once: true
+  delegate_to: localhost
+  become: false
+  ## `become: false` ALONE IS NOT ENOUGH. `ansible_become: true` is set as a
+  ## group var in clusters/*/group_vars/all.yml, and connection variables
+  ## outrank playbook/task keywords — so the keyword above is silently ignored
+  ## and every delegated MODULE (not action plugins like debug/assert/set_fact)
+  ## tries to sudo on the CONTROL machine, failing with
+  ## "sudo: a password is required".
+  ##
+  ## Verified experimentally: a delegated `stat` with only the keyword fails;
+  ## adding the var below makes it pass. This lay dormant because the `stat`
+  ## further down is inside a `when: effective_ssh_user != 'root'` block, so it
+  ## was skipped on every root-connected run — it surfaced the first time the
+  ## connection user became the named admin user, i.e. exactly when this guard starts to
+  ## matter. Do not remove the vars block.
+  vars:
+    ansible_become: false
+  block:
+
+    - name: Resolve the effective SSH connection user
+      ansible.builtin.set_fact:
+        effective_ssh_user: >-
+          {{ ssh_connection_user_override
+             | default(('root' if (enable_root_ssh | bool) else ssh_admin_user), true) }}
+
+    ## Deliberately does NOT print ansible_become: the block above overrides it
+    ## to false locally, so it would always read False here regardless of the
+    ## play's real setting. Escalation is unconditional anyway
+    ## (ansible_become: true in the cluster group_vars).
+    - name: Show the effective SSH access configuration
+      ansible.builtin.debug:
+        msg: >-
+          enable_root_ssh={{ enable_root_ssh }}
+          connecting as '{{ effective_ssh_user }}'
+          (ansible_user={{ ansible_user | default('<unset>') }})
+
+    # The one lockout combination the single flag cannot make unrepresentable:
+    # closing root login over the very root connection that is closing it. The
+    # run would succeed and the NEXT run would have no way in.
+    - name: Refuse to close root SSH while connected as root
+      ansible.builtin.assert:
+        that:
+          - not (effective_ssh_user == 'root' and not (enable_root_ssh | bool))
+        fail_msg: >-
+          REFUSING TO RUN: enable_root_ssh is false (PermitRootLogin no) but the
+          connection user resolves to 'root'. This would close root login using
+          the connection it is closing, and the next Ansible run would have no
+          way into the node. Either leave enable_root_ssh true, or set
+          ssh_connection_user_override to the named admin user first and verify
+          it works. See the "Closing root SSH" runbook in infrastructure/readme.md.
+        quiet: true
+
+    - name: Validate the named admin user when not connecting as root
+      when: effective_ssh_user != 'root'
+      block:
+
+        - name: Assert the connection user is a managed user
+          ansible.builtin.assert:
+            that:
+              - ssh_admin_user is defined
+              - ssh_admin_user | length > 0
+              - effective_ssh_user in (users | default([]))
+            fail_msg: >-
+              REFUSING TO RUN: the SSH connection user '{{ effective_ssh_user }}'
+              is not listed in the `users` variable
+              ({{ users | default([]) | join(', ') or 'EMPTY' }}), so this
+              playbook never creates it, never grants it sudo and never installs
+              its key. Add it to `users` in the cluster group_vars first.
+            quiet: true
+
+        - name: Check the connection user has a public key in pubkeys/
+          ansible.builtin.stat:
+            path: "{{ playbook_dir }}/pubkeys/{{ effective_ssh_user }}"
+          register: ssh_admin_pubkey
+
+        - name: Assert the connection user's public key exists
+          ansible.builtin.assert:
+            that:
+              - ssh_admin_pubkey.stat.exists
+            fail_msg: >-
+              REFUSING TO RUN: no public key at
+              ansible/pubkeys/{{ effective_ssh_user }}. Without it the user has
+              no authorized_keys entry and closing root SSH would lock everyone
+              out of the node.
+            quiet: true

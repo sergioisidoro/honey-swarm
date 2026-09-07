@@ -1,0 +1,183 @@
+---
+##
+# docker role defaults
+##
+# ⚠️ VARIABLE PRECEDENCE — READ BEFORE ADDING ANYTHING HERE ⚠️
+#
+# This role wraps `geerlingguy.docker` with `import_role`. Two precedence traps
+# were verified experimentally against the installed 7.6.0 role:
+#
+#   1. A variable that geerlingguy.docker ALSO defines in its own
+#      defaults/main.yml is NOT overridden by defining it here — the imported
+#      role's defaults win. (Group/play vars do win.)
+#   2. `docker_obsolete_packages` is set by the imported role via `include_vars`
+#      (tasks/main.yml loads vars/Debian.yml). include_vars outranks role
+#      defaults, group_vars AND `import_role: vars:` — the only things that beat
+#      it are `set_fact` and `-e` extra vars.
+#
+# So: every override below uses a DIFFERENT, namespaced variable name that only
+# we define (safe in role defaults, and overridable from group_vars as usual),
+# and tasks/main.yml maps them onto the geerlingguy names with `set_fact`
+# immediately before the import. Do not "simplify" this by renaming them back.
+
+## ---------------------------------------------------------------------------
+## Package set — pinned so the 4.1.1 -> 7.6.0 role bump is inert on the node
+## ---------------------------------------------------------------------------
+## geerlingguy.docker 7.6.0 defaults add `docker-ce-rootless-extras` and
+## `docker-buildx-plugin` to docker_packages. Neither is used on a Swarm node
+## (images are built in CI; rootless mode is not in play), and installing them
+## has two unwanted effects:
+##   * the "Install Docker packages" task reports *changed* and notifies
+##     `restart docker` — i.e. the package task itself bounces every container;
+##   * a newly-installed sibling package can drag docker-ce to a newer version
+##     to satisfy its dependency, silently upgrading the daemon even though
+##     docker_packages_state is `present`.
+## Pinning the set to exactly what 4.1.1 installed makes the package task a
+## no-op on an already-provisioned node. Add packages here deliberately, in a
+## maintenance window.
+docker_pinned_packages:
+  - "docker-{{ docker_edition }}"
+  - "docker-{{ docker_edition }}-cli"
+  - "containerd.io"
+
+## `present`, never `latest`: an already-installed docker-ce is left exactly as
+## it is. This is geerlingguy.docker's own default too, but it is pinned here so
+## a future role bump that flips the default cannot silently start upgrading the
+## daemon. Deliberate Docker upgrades go through 05-update-docker.yml.
+docker_pinned_packages_state: present
+
+## Optional exact version pin for the docker-ce* packages, e.g.
+## "5:27.5.1-1~ubuntu.24.04~noble" (apt syntax: the value is appended as
+## `docker-ce=<version>`). It is applied only to the `docker-*` entries above;
+## `containerd.io` versions independently, so pin that by writing the version
+## straight into docker_pinned_packages if you ever need to.
+##
+## Empty (default) = "whatever is installed stays installed", which is already
+## drift-proof given state=present. 05-update-docker.yml passes this explicitly
+## to move the daemon to a known version. Changing it WILL upgrade/downgrade the
+## daemon and restart it.
+docker_ce_version: ""
+
+## OPTIONAL apt hold on the container runtime. DEFAULT: OFF.
+##
+## An earlier revision of this role turned this ON and paired it with an
+## unattended-upgrades blacklist, on the theory that "Docker must only ever be
+## upgraded deliberately". That was wrong, and the reasoning is worth recording
+## so nobody re-introduces it:
+##
+##   * It removed the main realistic patching path. `03-update-nodes.yml` runs
+##     `apt upgrade: full`, which is how docker-ce actually gets patched on this
+##     node. Holding it there replaced a real control with "somebody remembers
+##     to run 05-update-docker.yml", which is not a control at all.
+##   * The thing it was protecting against was already protected. 03 REBOOTS the
+##     node when the kernel needs it — it is already a scheduled downtime
+##     window. A dockerd restart inside that window costs nothing extra; it is
+##     not the unannounced 06:00 outage the hold was defending against.
+##   * The risk it created was much worse than the one it removed. dockerd runs
+##     as root and is the trust boundary for every container on the box,
+##     including any holding application or database credentials. Container
+##     escape / privilege escalation CVEs are exactly the class of bug that gets
+##     patched here. Indefinitely deferring those to save 1-3 minutes inside an
+##     already-scheduled maintenance window is a bad trade, and a poor look in a
+##     security review.
+##
+## So: Docker is patched by routine OS maintenance (03-update-nodes.yml, which
+## verifies the swarm and every service afterwards), and 05-update-docker.yml
+## exists for TARGETED work — an urgent CVE between maintenance windows, moving
+## to a specific version, or rolling back.
+##
+## Turn this ON only for a deliberate, time-boxed freeze: pinning around a
+## known-bad release, or holding the runtime steady during an incident. Write
+## down when it comes off — a hold nobody remembers is how a node ends up two
+## years behind. `apt-mark showhold` and 03-update-nodes.yml both report it.
+docker_apt_hold: false
+docker_apt_hold_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+## ---------------------------------------------------------------------------
+## Obsolete-package removal — containerd/runc deliberately NOT removed
+## ---------------------------------------------------------------------------
+## geerlingguy.docker 7.6.0 added `containerd` and `runc` to the list it removes
+## (vars/Debian.yml, applied by setup-Debian.yml's "Ensure old versions of
+## Docker are not installed"). On a node provisioned by this project that
+## removal *should* be a no-op:
+## Docker's `containerd.io` package Conflicts/Replaces/Provides both, so the
+## distro packages cannot be co-installed with it, and Ansible's apt module
+## skips names that are not installed.
+##
+## We drop them anyway, because the failure mode is catastrophic and the benefit
+## is zero: if apt ever resolved `containerd`/`runc` to their *virtual* provider
+## instead of the (uninstalled) real package, `state: absent` would remove
+## `containerd.io`, cascade into `docker-ce`, and take every container on the
+## node down mid-play — before the repo is even re-added. On a single-node
+## cluster that is the whole platform. There is nothing to gain either: a node
+## provisioned by this project has never had a distro-packaged Docker.
+##
+## `docker-compose` / `docker-compose-v2` are also dropped: nothing here uses
+## compose (stacks deploy via `docker stack deploy`), so removing an operator's
+## compose CLI is a gratuitous change. The genuinely ancient names are kept.
+docker_safe_obsolete_packages:
+  - docker
+  - docker.io
+  - docker-engine
+  - docker-doc
+  - podman-docker
+
+## geerlingguy.docker 7.6.0 defaults to installing `docker-compose-plugin`.
+## Off here: it is another package install that notifies `restart docker`, and
+## nothing in this repo uses compose on the node. Set true if operators want
+## `docker compose` available by hand.
+docker_install_compose_plugin_enabled: false
+
+## ---------------------------------------------------------------------------
+## Container log retention
+## ---------------------------------------------------------------------------
+## Companion to roles/logging (which sets the 3-month journald window).
+## `docker_manage_log_options` is the SEPARABILITY LEVER: the daemon.json write
+## is the one part of this role that reliably restarts Docker (and therefore
+## bounces every container on this single node), so it can be turned off to
+## apply the package/repo work first and verify, then taken deliberately as its
+## own step:
+##
+##   # step 1 - repo/GPG migration + package no-ops, no daemon.json change
+##   ansible-playbook ... --tags docker -e docker_manage_log_options=false
+##   # step 2 - the deliberate restart
+##   ansible-playbook ... --tags docker
+##
+## The merge is also tagged `docker-logging`, so `--skip-tags docker-logging`
+## does the same thing.
+docker_manage_log_options: true
+
+## Two possible drivers:
+##
+##  json-file (DEFAULT, unchanged behaviour apart from the caps)
+##      Rotation is SIZE-based only; there is no way to say "keep 90 days".
+##      Before this change there were no caps at all, so a chatty container
+##      could fill the volume. max-size x max-file is a per-container ceiling.
+##
+##  journald (opt-in: set docker_log_driver: journald)
+##      Container stdout/stderr goes into the systemd journal and therefore
+##      inherits the 3-month MaxRetentionSec window + the SystemMaxUse ceiling
+##      from roles/logging. `docker logs` / `docker service logs` / the Portainer
+##      log viewer all keep working. This is the only way to get a genuine
+##      90-day window for CONTAINER logs on the node itself.
+##
+## CHANGING EITHER OF THESE RESTARTS THE DOCKER DAEMON => every container on the
+## node bounces. It also only affects containers created AFTER the change, so
+## the stacks must be redeployed to pick it up.
+docker_log_driver: json-file
+
+docker_log_opts:
+  max-size: '50m'
+  max-file: '5'
+  compress: 'true'
+
+## Rendered into daemon.json. Kept as a separate variable so the merge stays
+## readable.
+docker_log_daemon_options:
+  log-driver: "{{ docker_log_driver }}"
+  log-opts: "{{ docker_log_opts if docker_log_driver == 'json-file' else {} }}"

@@ -14,6 +14,43 @@ You can build an entire productivity and startup stack in a few minutes and unde
   - analytics
   - gitlab runner
   - mastodon social media
+- Hardened SSH (key-only, short login grace, no agent/X11 forwarding) with an
+  ordered, guarded runbook for closing root login
+- fail2ban with escalating bans and a `recidive` jail
+- Automatic security patching that **verifies itself** and fails the run if it
+  would silently patch nothing
+- Host and container log retention with disk ceilings
+- Maintenance playbooks for OS updates, targeted Docker upgrades with rollback,
+  and stack redeploys
+- Guarded volume formatting — a blank volume is formatted, a volume with data
+  never is
+- Explicit user deprovisioning, because removing someone from `users` does not
+  revoke their access
+
+## Security & operations 🔐
+
+Read the role defaults before running any of this against a live cluster — the
+comments there explain which settings can lock you out and which restart
+containers. The two that deserve attention before a first run are
+`roles/hardening/defaults/main.yml` (SSH access flags) and
+`roles/docker/defaults/main.yml` (the daemon.json rewrite is the one thing that
+restarts every container).
+
+### Playbook map
+
+| Playbook | Purpose | Restarts containers? |
+|---|---|---|
+| `provision.yml` | 00 + 01 + 02, full bootstrap | Only via the daemon.json step |
+| `00-init-nodes.yml` | OS, users, SSH, firewall, logging, patching, Docker | Only `--tags docker` with log options on |
+| `01-setup-swarm.yml` | Swarm init / join | No |
+| `02-deploy-infrastucture.yml` | Traefik + Portainer stacks | Those two services only |
+| `03-update-nodes.yml` | OS patching **incl. Docker** + reboot | Yes — full downtime; the routine patch path |
+| `04-update-stacks.yml` | Redeploy Traefik/Portainer | Those two services only |
+| `05-update-docker.yml` | Targeted Docker upgrade/rollback (urgent CVE, pinned version) | **Yes — every container** |
+
+Roles are tagged, so a targeted change can be applied without a full run —
+notably `--tags hardening,logging,unattended-upgrades` for the security pass,
+which does **not** restart Docker.
 
 ## We are built on the shoulders of Giants!
 This is heavily inspired and a lot of things replicated from [TADS Boilerplate project](https://github.com/thomvaill/tads-boilerplate), [swarmlet](https://swarmlet.dev/) and other projects like Dokku, and CapRover.
@@ -24,6 +61,12 @@ This is heavily inspired and a lot of things replicated from [TADS Boilerplate p
 - By default all non necessary incoming ports are CLOSED in the firewall. SSH is limited. If you want to open other ports
   - set `default_ufw_default_inbound_rule: 'allow'` on your cluster variables to accept traffic from any port - SCARY
   - You can add more ports (eg. if your containers and services are using some other ports) with `ufw_extra_rules` variable. See `roles/hardening/tasks/ufw.yml` for more technical details. - BETTER
+- **Docker's published ports bypass UFW.** A container that publishes a port is
+  reachable from the internet regardless of the firewall rules above. Route
+  services through Traefik instead of publishing ports on the host.
+- Swarm ports are restricted to the other nodes in your inventory rather than
+  being world-open. Set `restrict_swarm_ports_to_peers: false` for the old
+  behaviour, but understand what you are opening.
 
 # 🚀 Quickstart
 - Install Ansible on your machine

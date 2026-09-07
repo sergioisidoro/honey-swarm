@@ -1,0 +1,48 @@
+---
+
+- name: Ensure the journald drop-in directory exists
+  become: true
+  file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure journald retention ({{ journald_max_retention_sec }}, capped at {{ journald_system_max_use }})
+  become: true
+  template:
+    src: journald-retention.conf.j2
+    dest: /etc/systemd/journald.conf.d/99-honey-retention.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart journald
+
+- name: Ensure the persistent journal directory exists
+  become: true
+  file:
+    path: /var/log/journal
+    state: directory
+    owner: root
+    group: systemd-journal
+    mode: '2755'
+  when: journald_storage == 'persistent'
+
+- name: Report journal disk usage and the oldest retained entry (audit aid)
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail
+    journalctl --disk-usage
+    printf 'oldest retained entry: '
+    journalctl --no-pager -o short-iso 2>/dev/null | head -n 1
+  args:
+    executable: /bin/bash
+  register: journald_usage
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Show journal disk usage and retention reach
+  ansible.builtin.debug:
+    var: journald_usage.stdout_lines

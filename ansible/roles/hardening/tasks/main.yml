@@ -1,27 +1,174 @@
 ---
 
+# Build the list of addresses of the swarm nodes from the inventory. A node can
+# legitimately be reached on either its public address (ansible_host) or its
+# private/advertise address (dockerswarm_advertise_addr), and which one a peer's
+# packets arrive from depends on how the swarm was joined — so allow BOTH.
+# These are the only peers that need to reach the swarm ports.
+- name: Build list of swarm peer addresses from the inventory
+  set_fact:
+    swarm_peer_ips: >-
+      {{ (swarm_peer_ips | default([])
+          + [hostvars[item].ansible_host | default(None),
+             hostvars[item].dockerswarm_advertise_addr | default(None)])
+         | reject('none') | unique | list }}
+  loop: "{{ groups['nodes'] | default([]) }}"
+
+- name: Show the swarm peer addresses the firewall will trust
+  ansible.builtin.debug:
+    var: swarm_peer_ips
+
+# A typo here must fail loudly rather than fall through to "no firewall".
+- name: Validate the firewall mode
+  ansible.builtin.assert:
+    that:
+      - hardening_firewall in ['ufw', 'cloud']
+    fail_msg: >-
+      hardening_firewall must be 'ufw' (UFW is the firewall) or 'cloud' (the
+      DigitalOcean cloud firewall is, and UFW is disabled). Got
+      '{{ hardening_firewall | default("<undefined>") }}'.
+    quiet: true
+
+# The UFW rules are ALWAYS maintained, in both modes. In `cloud` mode they are
+# written but not enforced, so re-enabling UFW is a one-command rollback to a
+# correct rule set. See roles/hardening/defaults/main.yml and the
+# "UFW -> DigitalOcean cloud firewall cutover" runbook in readme.md.
 - import_tasks: ufw.yml
+
 - import_tasks: fail2ban.yml
 
-# If timezone is defined, set it
-- name: set timezone to {{ timezone }} 
+# If timezone is defined, set it. Unset by default - see cluster group_vars.
+- name: set timezone to {{ timezone }}
   timezone:
     name: "{{ timezone }}"
   when: ansible_facts['os_family'] == "Debian" and timezone is defined
 
+## ---------------------------------------------------------------------------
+## SSH
+## ---------------------------------------------------------------------------
+##
+## Two layers on purpose:
+##
+##  1. A drop-in in /etc/ssh/sshd_config.d/ (Ubuntu 20.04+). sshd uses the FIRST
+##     obtained value for every keyword and the Include line sits at the top of
+##     sshd_config, so drop-ins are evaluated in glob order BEFORE the main file.
+##     Cloud images ship /etc/ssh/sshd_config.d/50-cloud-init.conf which on some
+##     DigitalOcean images sets `PasswordAuthentication yes` — that silently wins
+##     over anything written into sshd_config itself. Our file is named
+##     `00-honey-hardening.conf` so it sorts first and wins over cloud-init.
+##
+##  2. The historical lineinfile edits to /etc/ssh/sshd_config, kept for hosts
+##     that have no Include directive, and as a belt-and-braces default.
+##
+## Every write is validated with `sshd -t` before it is put in place, so a typo
+## cannot leave the node with an sshd that refuses to start.
+
+- name: Detect sshd_config.d drop-in support
+  ansible.builtin.command: >-
+    grep -qE '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config\.d/\*\.conf'
+    /etc/ssh/sshd_config
+  register: sshd_dropin_supported
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install the authoritative sshd hardening drop-in
+  template:
+    src: sshd_hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-honey-hardening.conf
+    owner: root
+    group: root
+    mode: '0600'
+    validate: '/usr/sbin/sshd -t -f %s'
+  when: sshd_dropin_supported.rc == 0
+  notify: restart sshd
+
 # Ensure Password logins are disabled.
 - name: Disable empty password login
-  lineinfile: 
+  lineinfile:
     dest: /etc/ssh/sshd_config
-    regexp: '^#?PermitEmptyPasswords' 
+    regexp: '^(#\s*)?PermitEmptyPasswords '
     line: 'PermitEmptyPasswords no'
   notify: restart sshd
 
 - name: Disable password login
-  lineinfile: 
+  lineinfile:
     dest: /etc/ssh/sshd_config
     regexp: '^(#\s*)?PasswordAuthentication '
     line: 'PasswordAuthentication no'
-  when: 
+  when:
     - disable_password_ssh is defined and disable_password_ssh
   notify: restart sshd
+
+# Safe, lockout-proof SSH hardening (no effect on who can log in).
+- name: Apply baseline sshd hardening
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?{{ item.key }}\\s"
+    line: "{{ item.key }} {{ item.value }}"
+    validate: '/usr/sbin/sshd -t -f %s'
+  with_items:
+    - { key: 'PubkeyAuthentication', value: 'yes' }
+    - { key: 'KbdInteractiveAuthentication', value: 'no' }
+    - { key: 'MaxAuthTries', value: '{{ ssh_max_auth_tries }}' }
+    - { key: 'LoginGraceTime', value: '{{ ssh_login_grace_time }}' }
+    - { key: 'ClientAliveInterval', value: '{{ ssh_client_alive_interval }}' }
+    - { key: 'ClientAliveCountMax', value: '{{ ssh_client_alive_count_max }}' }
+    - { key: 'X11Forwarding', value: 'no' }
+    - { key: 'AllowAgentForwarding', value: 'no' }
+    - { key: 'AllowTcpForwarding', value: '{{ ssh_allow_tcp_forwarding }}' }
+    - { key: 'PermitUserEnvironment', value: 'no' }
+  notify: restart sshd
+
+# PermitRootLogin is derived from `enable_root_ssh` (see defaults/main.yml).
+# It is always written, so the node's state is deterministic rather than
+# whatever the cloud image happened to ship:
+#   enable_root_ssh: true  -> prohibit-password (key-based root works; this is
+#                             what Ansible uses today)
+#   enable_root_ssh: false -> no
+# The assertions in tasks/assert-ssh-access.yml guarantee we are NOT connected
+# as root when this writes `no`.
+- name: Set root SSH login policy ({{ 'prohibit-password' if enable_root_ssh | bool else 'no' }})
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin\s'
+    line: "PermitRootLogin {{ 'prohibit-password' if enable_root_ssh | bool else 'no' }}"
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: restart sshd
+
+- name: Report the effective sshd configuration (audit aid)
+  ansible.builtin.command: >-
+    sshd -T -C user=root,host=localhost,addr=127.0.0.1
+  register: sshd_effective
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Show the security-relevant effective sshd settings
+  ansible.builtin.debug:
+    msg: >-
+      {{ sshd_effective.stdout_lines
+         | select('match', '^(passwordauthentication|permitrootlogin|pubkeyauthentication|permitemptypasswords|kbdinteractiveauthentication|maxauthtries|x11forwarding|allowagentforwarding|logingracetime) ')
+         | list }}
+  when: sshd_effective.rc == 0
+
+## ---------------------------------------------------------------------------
+## TODO (planned, NOT implemented here): WireGuard management mesh
+## ---------------------------------------------------------------------------
+## Target state, once there is more than one node and/or once the DO cloud
+## firewall owns the packet filtering:
+##
+##   * Every node runs a WireGuard interface (wg0) on a private /24; the swarm
+##     advertise address becomes the wg0 address, so 2377/7946/4789/2376/9001
+##     are bound to the mesh and never appear on a public interface at all
+##     (today they are public-IP-bound and merely source-filtered by UFW).
+##   * SSH (22/tcp) is then reachable ONLY over wg0 — the DO cloud firewall
+##     allows the WireGuard UDP port from admin IPs and nothing else inbound
+##     except 80/443.
+##   * Admin surfaces currently published through Traefik (Portainer, the
+##     Traefik dashboard) move behind the mesh instead of behind basic auth.
+##
+## Sequencing matters: WireGuard must be up, verified, and surviving a reboot
+## BEFORE SSH is restricted to the mesh, and the DO firewall must allow the
+## WireGuard port before UFW is turned off. Do not start this work in the same
+## change as the UFW -> DO firewall cutover.

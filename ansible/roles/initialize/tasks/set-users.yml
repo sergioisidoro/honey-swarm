@@ -1,11 +1,22 @@
 - name: Add and configure users to node machine
   when: users is defined
   block:
+    # Appends `sudo` (append: yes preserves other memberships, e.g. docker).
+    #
+    # NOTE: on many cloud images an account created this way ends up with
+    # `sudo` as its PRIMARY group rather than a secondary one, because useradd
+    # assigns it at creation time. Where that happens, `sudo` membership cannot
+    # be revoked by clearing secondary groups — see the deprovisioning block at
+    # the bottom of this file, which moves the account onto its own group.
+    #
+    # The `docker` group is added later by the docker role, since it does not
+    # exist yet at this point in the run.
     - name: Create users from public keys
       user:
         name: "{{ item }}"
         shell: /bin/bash
-        group: sudo
+        groups: sudo
+        append: yes
         state: present
       with_items: "{{ users }}"
 
@@ -24,3 +35,117 @@
         key: "{{ lookup('file', '../../pubkeys/'+item) }}"
         state: present
       with_items: "{{ users }}"
+## ---------------------------------------------------------------------------
+## Deprovisioning
+## ---------------------------------------------------------------------------
+- name: Revoke access for deprovisioned users
+  when: (deprovisioned_users | default([])) | length > 0
+  block:
+
+    # Cheap guard against the obvious foot-gun: revoking the account this run
+    # is connecting through, or one still listed in `users` (which would then
+    # be re-added by the block above on the very next run).
+    - name: Refuse to deprovision an active or connecting user
+      ansible.builtin.assert:
+        that:
+          - item not in (users | default([]))
+          - item != (ssh_admin_user | default(''))
+          - item != (ansible_user | default(''))
+        fail_msg: >-
+          REFUSING TO RUN: '{{ item }}' is listed in deprovisioned_users but is
+          also an active user (users / ssh_admin_user / ansible_user). Remove it
+          from `users` first, and never deprovision the account Ansible connects
+          as.
+        quiet: true
+      loop: "{{ deprovisioned_users }}"
+
+    - name: Resolve home directories of deprovisioned users
+      ansible.builtin.shell: "getent passwd {{ item }} | cut -d: -f6"
+      register: deprovisioned_homes
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      loop: "{{ deprovisioned_users }}"
+
+    - name: Remove authorized SSH keys for deprovisioned users
+      ansible.builtin.file:
+        path: "{{ item.stdout | trim }}/.ssh/authorized_keys"
+        state: absent
+      loop: "{{ deprovisioned_homes.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: (item.stdout | default('') | trim) | length > 0
+
+    # A departed user with no key but a live NOPASSWD sudoers drop-in is still a
+    # standing escalation path for anyone who reaches the account another way.
+    - name: Remove passwordless sudo for deprovisioned users
+      ansible.builtin.file:
+        path: "/etc/sudoers.d/{{ item }}"
+        state: absent
+      loop: "{{ deprovisioned_users }}"
+
+    # Revoking the key removes the way IN; this removes the privileges that
+    # would be waiting if they ever got in another way. Debian's stock
+    # /etc/sudoers grants `%sudo ALL=(ALL:ALL) ALL` independently of the
+    # per-user drop-in removed above, and membership of `docker` is
+    # root-equivalent (the socket can mount the host filesystem). Only
+    # SECONDARY groups are cleared; the user's own primary group is untouched.
+    - name: Strip secondary groups from deprovisioned users
+      ansible.builtin.user:
+        name: "{{ item.item }}"
+        groups: []
+        append: false
+        state: present
+      loop: "{{ deprovisioned_homes.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: (item.stdout | default('') | trim) | length > 0
+
+    # `groups: []` above clears only SECONDARY groups. Where an account was
+    # created with `sudo` as its PRIMARY group (common on cloud images), the
+    # one membership that actually grants sudo — via Debian's stock
+    # `%sudo ALL=(ALL:ALL) ALL` in /etc/sudoers — survives that strip and the
+    # audit line still reads `groups=sudo`. Move the account onto its own
+    # private group so nothing is left pointing at a privileged one, and take
+    # away the login shell while we are here. Existing files keep their current
+    # group ownership; that is deliberate, chowning a departed user's home is
+    # not this task's job.
+    - name: Ensure a private group exists for deprovisioned users
+      ansible.builtin.group:
+        name: "{{ item.item }}"
+        state: present
+      loop: "{{ deprovisioned_homes.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: (item.stdout | default('') | trim) | length > 0
+
+    - name: Move deprovisioned users off any privileged primary group
+      ansible.builtin.user:
+        name: "{{ item.item }}"
+        group: "{{ item.item }}"
+        shell: /usr/sbin/nologin
+        password_lock: true
+        state: present
+      loop: "{{ deprovisioned_homes.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: (item.stdout | default('') | trim) | length > 0
+
+    - name: Report what remains for deprovisioned users (audit aid)
+      ansible.builtin.shell: >-
+        for u in {{ deprovisioned_users | join(' ') }}; do
+          h=$(getent passwd "$u" | cut -d: -f6);
+          printf '%s: account=%s keys=%s sudoers=%s groups=%s\n' "$u" \
+            "$(getent passwd "$u" >/dev/null && echo present || echo absent)" \
+            "$( [ -s "$h/.ssh/authorized_keys" ] && echo PRESENT || echo none)" \
+            "$( [ -f "/etc/sudoers.d/$u" ] && echo PRESENT || echo none)" \
+            "$(id -nG "$u" 2>/dev/null || echo -)";
+        done
+      register: deprovisioned_state
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Show deprovisioned user state
+      ansible.builtin.debug:
+        var: deprovisioned_state.stdout_lines

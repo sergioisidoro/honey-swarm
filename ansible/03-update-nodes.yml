@@ -1,0 +1,147 @@
+---
+###
+# update-nodes playbook
+##
+# Routine OS package updates, and a reboot when the kernel/libc needs one.
+#
+# ⚠️ SINGLE NODE: `serial: 1` below is NOT a safety property today. It exists so
+# a future multi-node cluster reboots one node at a time and keeps quorum. With
+# one node, "rolling" is a euphemism: the reboot is FULL DOWNTIME for the API,
+# Traefik and Portainer (~1-3 minutes, longer if fsck runs). Schedule it.
+#
+# ⚠️ THIS UPGRADES THE CONTAINER RUNTIME TOO, and that is intentional.
+# `apt upgrade: full` will pull a new docker-ce when one is available, which
+# restarts dockerd — and dockerd cannot use live-restore in Swarm mode, so every
+# container on the node stops and restarts (~1-3 min). Inside this playbook that
+# costs nothing extra: it is already a scheduled window that may reboot the node
+# outright. This is the ROUTINE path by which Docker gets security patches, so
+# run this playbook on a cadence. The run reports whether the runtime moved and
+# verifies the swarm and every service afterwards.
+#
+# For an urgent CVE between windows, a specific pinned version, or a rollback,
+# use 05-update-docker.yml — same restart, but with pre/post verification and a
+# known rollback target.
+#
+# Between runs, roles/unattended-upgrades applies Ubuntu SECURITY-pocket fixes
+# automatically (no automatic reboot). Docker's repo is a different origin, so
+# it is not in that automatic scope — this playbook is what covers it.
+#
+# Usage:
+#   ansible-playbook -i ansible/clusters/ENVIRONMENT ansible/03-update-nodes.yml
+#
+# Skip the reboot step entirely with:
+#   ansible-playbook ... -e allow_reboot=false
+##
+
+- hosts: nodes
+  become: true
+  serial: 1
+  vars:
+    # Set to false to apply updates but never reboot automatically.
+    allow_reboot: true
+    # full = dist-upgrade (handles new deps / kernels), safe = upgrade only.
+    apt_upgrade_type: full
+  pre_tasks:
+    - name: Validate SSH access flags before touching the node
+      ansible.builtin.import_tasks: tasks/assert-ssh-access.yml
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages ({{ apt_upgrade_type }})
+      apt:
+        upgrade: "{{ apt_upgrade_type }}"
+        autoremove: yes
+        autoclean: yes
+      register: apt_upgrade
+
+    - name: Check whether a reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+
+    - name: Reboot node if required
+      reboot:
+        msg: "Reboot triggered by Ansible after package upgrade"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: docker info
+      when:
+        - allow_reboot | bool
+        - reboot_required_file.stat.exists
+
+    - name: Record the container runtime version after upgrading
+      ## `command:` does not interpret the \n, so dpkg-query printed a literal
+      ## "n" between packages. shell + single quotes keeps the escape intact.
+      ansible.builtin.shell: >-
+        dpkg-query -W -f='${Package}=${Version}\n' docker-ce containerd.io
+      register: runtime_after
+      changed_when: false
+      failed_when: false
+
+    - name: Report the container runtime state
+      ansible.builtin.debug:
+        msg: >-
+          Container runtime now: {{ runtime_after.stdout_lines | default([]) | join(', ') }}
+          {{ '(compare with the pre-upgrade value in the previous run log)' }}
+
+    # Holds are OFF by default. Anything listed here is a deliberate freeze that
+    # someone put in place — and a package that is NOT receiving security
+    # updates. Surfaced on every run so a forgotten freeze cannot go unnoticed.
+    - name: List any packages held back from upgrades
+      ansible.builtin.command: apt-mark showhold
+      register: apt_holds
+      changed_when: false
+      failed_when: false
+
+    - name: Warn about held packages
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'HELD BACK (NOT receiving security updates - is this freeze still intended?): '
+             ~ (apt_holds.stdout_lines | join(', '))
+             if (apt_holds.stdout_lines | default([]) | length > 0)
+             else 'No packages held back - everything is receiving updates.' }}
+
+    - name: Verify the swarm and services came back after the reboot
+      ansible.builtin.shell: |
+        set -o pipefail
+        docker node ls
+        out=$(docker service ls --format '{% raw %}{{.Name}} {{.Replicas}}{% endraw %}')
+        printf '%s\n' "$out"
+        printf '%s\n' "$out" | awk 'NF { split($2, a, "/"); if (a[1] != a[2] || a[2] == 0) exit 1 }'
+      args:
+        executable: /bin/bash
+      register: post_reboot_state
+      changed_when: false
+      failed_when: false
+      until: post_reboot_state.rc == 0
+      retries: 30
+      delay: 10
+      when:
+        - allow_reboot | bool
+        - reboot_required_file.stat.exists
+
+    - name: Assert the cluster is healthy after the reboot
+      ansible.builtin.assert:
+        that:
+          - post_reboot_state.rc == 0
+        fail_msg: >-
+          The node rebooted but the swarm/services did not come back cleanly:
+          {{ post_reboot_state.stdout_lines | default([]) }}
+      when:
+        - allow_reboot | bool
+        - reboot_required_file.stat.exists
+
+    - name: Report pending reboot when auto-reboot is disabled
+      debug:
+        msg: >-
+          A reboot is required on {{ inventory_hostname }} but allow_reboot is
+          false. Reboot this node manually to finish applying updates.
+      when:
+        - not (allow_reboot | bool)
+        - reboot_required_file.stat.exists

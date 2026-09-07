@@ -11,6 +11,10 @@
     
 # use dockerswarm_advertise_addr instead of iface when ethX has multiple IP addresses
 - hosts: all
+  pre_tasks:
+    - name: Validate SSH access flags before touching the node
+      ansible.builtin.import_tasks: tasks/assert-ssh-access.yml
+
   tasks:
     - name: define dockerswarm_advertise_addr_string (defined) - PROVIDED
       set_fact:

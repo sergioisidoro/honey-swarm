@@ -1,13 +1,51 @@
 ---
+# The connection user is NOT hard-coded here. It is derived from
+# `enable_root_ssh` in the cluster group_vars (root today, the named admin user
+# once root SSH is closed). A `remote_user:` play keyword would shadow that and
+# make the flag silently inert, so there deliberately isn't one.
 - hosts: all
-  remote_user: root
   gather_facts: true
+  pre_tasks:
+    - name: Validate SSH access flags before touching the node
+      ansible.builtin.import_tasks: tasks/assert-ssh-access.yml
+
   tasks:
     - debug:
         msg: "Loaded base playbook"
   roles:
-    - initialize
-    - hetzner
-    - digital-ocean
-    - hardening
-    - docker
+    # Swap is set up inside `initialize` (gated on swap_file_size_mb) rather
+    # than listed here, so a cluster that does not want swap simply omits the
+    # variable. Matches upstream honey-swarm.
+    #
+    # Roles are tagged so a targeted change can be applied without running the
+    # whole bootstrap — notably `--tags hardening,logging,unattended-upgrades`
+    # for the security pass, which does NOT restart Docker.
+    #
+    # The `docker` role does NOT upgrade docker-ce (docker_packages_state is
+    # pinned to `present` and the runtime is on apt hold — deliberate upgrades
+    # go through 05-update-docker.yml). The one thing in it that DOES restart
+    # the daemon, and therefore bounces every container on this single node, is
+    # the /etc/docker/daemon.json rewrite. That is separable:
+    #   --tags docker -e docker_manage_log_options=false   (no restart)
+    #   --tags docker                                       (takes the restart)
+    - role: initialize
+      tags: [initialize]
+    - role: hetzner
+      tags: [volumes, hetzner]
+    - role: digital-ocean
+      tags: [volumes, digital-ocean]
+    - role: hardening
+      tags: [hardening, security]
+    # Host log retention (journald 3-month window + size ceiling). Runs before
+    # the docker role so the journal limits are in place if container logs are
+    # pointed at journald.
+    - role: logging
+      tags: [logging, security]
+    # Automatic security patching. Tagged separately so it can be applied
+    # without touching Docker (`--tags unattended-upgrades`). The container
+    # runtime is blacklisted here AND held by the docker role — see
+    # roles/unattended-upgrades/defaults/main.yml.
+    - role: unattended-upgrades
+      tags: [unattended-upgrades, patching, security]
+    - role: docker
+      tags: [docker]

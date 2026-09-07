@@ -4,20 +4,85 @@
   when: hetzner_volumes is defined
   block:
 
+    # NOTE: no `recurse: yes` — see the digital-ocean role for why (it walks the
+    # whole mounted dataset and appears to hang). We only need the dir to exist.
     - name: Create mount point if does not exist
       ansible.builtin.file:
         path: "{{ item.mount_point }}"
         state: directory
-        recurse: yes
-      with_items: "{{ hetzner_volume_mounts }}"
-      when: hetzner_volume_mounts is defined
-    # TO DO - CHECK IF FILE SYSTEM NEEDS FORMATING
-    # - name: Format volume
-    #   mkfs:
-    #     fstype: ext4
-    #     state: formated
-    #     dev: "/dev/disk/by-id/{{volume_id}}"
-    #   with_items: "{{ hetzner_volumes }}"
+        follow: no
+      with_items: "{{ hetzner_volumes }}"
+    ## -----------------------------------------------------------------------
+    ## Formatting a blank volume
+    ## -----------------------------------------------------------------------
+    ## This is the only task in this repo that can destroy data irrecoverably,
+    ## so it is guarded three ways and is OFF by default:
+    ##
+    ##   1. `hetzner_volume_format` must be explicitly true. A routine
+    ##      provision.yml / 00-init-nodes.yml run can never format anything.
+    ##   2. The probe below must report BLANK — i.e. blkid finds NO filesystem
+    ##      signature at all. Any volume carrying data has one, so this also
+    ##      covers the mounted case (a mounted volume necessarily has a
+    ##      filesystem, so it can never read BLANK).
+    ##   3. `force: false` on the filesystem module, so even if the guards above
+    ##      were somehow wrong it refuses to overwrite an existing filesystem
+    ##      rather than silently reformatting it.
+    ##
+    ## Set the flag on the single run that builds a new node — not in
+    ## group_vars, where it would persist:
+    ##
+    ##   ansible-playbook -i ansible/clusters/production ansible/provision.yml \
+    ##     -e hetzner_volume_format=true
+    ##
+    ## The probe distinguishes MISSING from BLANK on purpose: a device path that
+    ## does not exist would otherwise read as "no signature" and look formattable.
+    - name: Probe Hetzner volumes for an existing filesystem
+      ansible.builtin.shell: |
+        dev=/dev/disk/by-id/{{ item.volume_id }}
+        if [ ! -e "$dev" ]; then echo MISSING; exit 0; fi
+        t=$(blkid -p -o value -s TYPE "$dev" 2>/dev/null || true)
+        if [ -z "$t" ]; then echo BLANK; else echo "FS:$t"; fi
+      register: hetzner_volume_probe
+      changed_when: false
+      check_mode: false
+      loop: "{{ hetzner_volumes }}"
+      loop_control:
+        label: "{{ item.volume_id }}"
+
+    - name: Report what each Hetzner volume currently holds
+      ansible.builtin.debug:
+        msg: "{{ item.item.volume_id }} -> {{ item.stdout | trim }}"
+      loop: "{{ hetzner_volume_probe.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.volume_id }}"
+
+    ## Turns an otherwise baffling mount failure ("wrong fs type, bad option,
+    ## bad superblock") into an instruction.
+    - name: Warn when a blank volume was found but formatting is disabled
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item.volume_id }} has NO filesystem and the mount below will
+          fail. If this is a genuinely new, empty volume, re-run with
+          -e hetzner_volume_format=true to format it ext4.
+          If it is NOT new, stop: something is wrong with the device.
+      loop: "{{ hetzner_volume_probe.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.volume_id }}"
+      when:
+        - not (hetzner_volume_format | default(false) | bool)
+        - (item.stdout | default('') | trim) == 'BLANK'
+
+    - name: Create a filesystem on genuinely blank Hetzner volumes
+      community.general.filesystem:
+        fstype: ext4
+        dev: "/dev/disk/by-id/{{ item.item.volume_id }}"
+        force: false
+      loop: "{{ hetzner_volume_probe.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.volume_id }}"
+      when:
+        - hetzner_volume_format | default(false) | bool
+        - (item.stdout | default('') | trim) == 'BLANK'
 
     - name: Mount filesystem
       mount:

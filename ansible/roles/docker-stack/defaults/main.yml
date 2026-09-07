@@ -6,6 +6,15 @@
 portainer_image: "portainer/portainer-ce"
 portainer_agent_image: "portainer/agent"
 
+# Absolute remote directory for the rendered stack files. Must be absolute: the
+# `docker stack deploy` CLI does not expand `~`, so a tilde path makes the deploy
+# fail with "open ~/.honey/...: no such file or directory".
+docker_stack_remote_dir: "{{ ansible_env.HOME }}/.honey/stacks/{{ docker_stack_name }}"
+
+# Swarm equivalent of a pull policy. `always` re-resolves the registry digest on
+# every deploy so moved tags are picked up; set to `changed` or `never` to pin.
+docker_stack_resolve_image: always
+
 docker_stack_directory_local_path: "stacks/{{ docker_stack_name }}"
 docker_stack_yaml_local_path: "{{ docker_stack_directory_local_path }}/{{ docker_stack_name }}.yml.j2"
 docker_stack_setup_local_path: "{{ docker_stack_directory_local_path }}/setup.sh.j2"
